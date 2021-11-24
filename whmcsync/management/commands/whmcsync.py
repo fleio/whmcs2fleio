@@ -1,9 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
 
-from whmcsync.whmcsync.exceptions import DBSyncException
-from whmcsync.whmcsync.sync.clients import sync_all_clients
-from whmcsync.whmcsync.sync.clients import sync_client
+from whmcsync.whmcsync.sync.clients import sync_clients
 from whmcsync.whmcsync.operations import verify_settings
 from whmcsync.whmcsync.sync.client_groups import sync_client_groups
 from whmcsync.whmcsync.sync.currencies import sync_currencies
@@ -22,9 +20,9 @@ class Command(BaseCommand):
                             nargs='+',
                             metavar='whmcs_client_id',
                             help='Sync only specified clients')
-        parser.add_argument('--all',
+        parser.add_argument('--all-clients',
                             action='store_true',
-                            dest='all',
+                            dest='allclients',
                             default=False,
                             help='Sync all clients from WHMCS')
         parser.add_argument('--active-only',
@@ -32,6 +30,11 @@ class Command(BaseCommand):
                             dest='activeonly',
                             default=False,
                             help='Sync only active clients.')
+        parser.add_argument('--client-groups',
+                            action='store_true',
+                            dest='clientgroups',
+                            default=False,
+                            help='Sync all client groups from WHMCS')
         parser.add_argument('--products',
                             action='store_true',
                             dest='products',
@@ -70,6 +73,29 @@ class Command(BaseCommand):
                             default=False,
                             help='Do not modify any data. Only print what will be changed')
 
+    def _sync_client_groups(self, options):
+        groups_list, exception_list = sync_client_groups(options=options)
+        self.stdout.write('\nNumber of synced client groups: %d \nNumber of client groups failed to sync: %s'
+                          % (len(groups_list), len(exception_list)))
+
+    def _sync_currencies(self, options):
+        currencies_list, exception_list = sync_currencies(fail_fast=options.get('failfast'), default=False)
+        self.stdout.write('\nNumber of synced currencies: %d \nNumber of currencies failed to sync: %s'
+                          % (len(currencies_list), len(exception_list)))
+
+    def _sync_clients(self, options, whmcs_ids=None):
+        client_list, exception_list = sync_clients(
+            fail_fast=options.get('failfast', False),
+            whmcs_ids=whmcs_ids,
+            active_only=options.get('activeonly', False),
+        )
+        if client_list:
+            self.stdout.write('\nSuccessfully synced WHMCS client(s):\n')
+            for client_display in client_list:
+                self.stdout.write(str(client_display), ending='\n')
+        self.stdout.write('\nNumber of synced clients: %d \nNumber of clients failed to sync: %s'
+                          % (len(client_list), len(exception_list)))
+
     def handle(self, *args, **options):
         """Execute the sync command and take into account any parameters passed"""
 
@@ -77,38 +103,25 @@ class Command(BaseCommand):
 
         if options.get('all') and options.get('clients'):
             raise CommandError('Specify either "--all" or "--clients" not both')
-        # TODO: remove the line below
-        self.stdout.write('{} {}'.format(args, options))
 
         if options.get('taxes'):
             sync_tax_rules(fail_fast=options.get('failfast'))
 
         if options.get('currencies'):
-            # NOTE: sync all currencies first in order to have them for clients
-            # default will sync the rates and the default currency too
             sync_currencies(fail_fast=options.get('failfast'), default=False)
 
-        if options.get('all'):
-            sync_client_groups(options=options)  # NOTE(tomo): Sync client groups first
-            client_list, exception_list = sync_all_clients(fail_fast=options.get('failfast', False))
-            for exception in exception_list:
-                self.stderr.write('{}'.format(exception))
-            if client_list:
-                self.stdout.write('Successfully synced WHMCS client(s):')
-                for client_display in client_list:
-                    self.stdout.write(str(client_display), ending='\n')
-            self.stdout.write('\nNumber of synced clients: %d \nNumber of clients failed to sync: %s'
-                              % (len(client_list), len(exception_list)))
+        if options.get('clientgroups'):
+            self._sync_client_groups(options=options)
+
+        if options.get('allclients') or options.get('activeonly'):
+            self._sync_currencies(options=options)
+            self._sync_client_groups(options=options)
+            self._sync_clients(options=options)
 
         if options.get('clients'):
-            client_list = options.get('clients')
-            for whmcs_id in client_list:
-                try:
-                    self.stdout.write('Successfully synced WHMCS client %s' % sync_client(whmcs_id))
-                except DBSyncException as ex:
-                    self.stderr.write('{}'.format(ex))
-                    if options.get('failfast'):
-                        break
+            self._sync_currencies(options=options)
+            self._sync_client_groups(options=options)
+            self._sync_clients(options=options, whmcs_ids=options.get('clients'))
 
         if options.get('products'):
             failfast = options.get('failfast', False)

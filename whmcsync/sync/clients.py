@@ -1,24 +1,52 @@
-import logging
 import decimal
-
+import logging
 from datetime import datetime
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
+from fleio.core.models import Client
+from fleio.core.models import ClientStatus
+from fleio.core.models import Role
+from fleio.core.models import UserToClient
 from whmcsync.whmcsync.exceptions import DBSyncException
 from whmcsync.whmcsync.models import SyncedAccount
 from whmcsync.whmcsync.models import Tblclients
-
-from fleio.core.models import Client
-from fleio.core.models import UserToClient
 from whmcsync.whmcsync.operations import add_client_groups
 from whmcsync.whmcsync.operations import match_currency
 from whmcsync.whmcsync.operations import sync_client_credit
 from whmcsync.whmcsync.sync.client_contacts import sync_client_contacts
+from whmcsync.whmcsync.sync.utils import FieldToSync
+from whmcsync.whmcsync.sync.utils import sync_fields
 
 LOG = logging.getLogger('whmcsync')
 User = get_user_model()
+
+
+class ClientField(FieldToSync):
+    record_name = 'Client'
+
+
+class UserField(FieldToSync):
+    record_name = 'User'
+
+
+CLIENT_FIELDS_TO_SYNC = [
+    ClientField(fleio_key='first_name', whmcs_key='firstname', fleio_max_length=127),
+    ClientField(fleio_key='last_name', whmcs_key='lastname', fleio_max_length=127),
+    ClientField(fleio_key='company', whmcs_key='companyname', fleio_max_length=127),
+    ClientField(fleio_key='address1', whmcs_key='address1', fleio_max_length=255),
+    ClientField(fleio_key='address2', whmcs_key='address2', fleio_max_length=255),
+    ClientField(fleio_key='city', whmcs_key='city', fleio_max_length=127),
+    ClientField(fleio_key='country', whmcs_key='country', fleio_max_length=2),
+    ClientField(fleio_key='state', whmcs_key='state', fleio_max_length=127),
+    ClientField(fleio_key='zip_code', whmcs_key='postcode', fleio_max_length=10),
+    ClientField(fleio_key='phone', whmcs_key='phonenumber', fleio_max_length=64),
+    ClientField(fleio_key='email', whmcs_key='email', fleio_max_length=127),
+    ClientField(fleio_key='vat_id', whmcs_key='tax_id', fleio_max_length=32),
+    ClientField(fleio_key='tax_exempt', whmcs_key='taxexempt'),
+]
 
 
 def sync_client(id, whmcs_client=None):
@@ -31,53 +59,79 @@ def sync_client(id, whmcs_client=None):
             raise DBSyncException('WHMCS client ID %s is not valid.' % id)
 
     try:
+        # check if client already exists from a previous import
         synced_client = SyncedAccount.objects.get(whmcs_id=whmcs_client.pk,
                                                   whmcs_uuid=whmcs_client.uuid,
                                                   subaccount=False)
         client = synced_client.client
         user = synced_client.user
     except SyncedAccount.DoesNotExist:
-        try:
-            User.objects.get(username=whmcs_client.email)
-            raise DBSyncException('User %s already exists in Fleio database.' % whmcs_client.email)
-        except User.DoesNotExist:
-            create = True
-            user = User()
-            client = Client()
+        # check if client already exists because of using fleio-whmcs module
+        # and not because of using a previous import
+        existing_client = Client.objects.filter(external_billing_id=whmcs_client.uuid).first()
+        if existing_client:
+            client = existing_client
+            # find related user
+            owner_role = Role.objects.get_owner_role()
+            if owner_role:
+                user_to_client = UserToClient.objects.filter(client=client, roles=owner_role).first()
+                if not user_to_client and UserToClient.objects.filter(client=client).exists():
+                    raise DBSyncException(
+                        'Cannot update client with external billing id {} from Fleio. '
+                        'Owner role exists in fleio but client has no owner. '
+                        'Set his owner then re-run operation.'.format(whmcs_client.uuid)
+                    )
+            else:
+                user_to_client = UserToClient.objects.filter(client=client).first()
+            if not user_to_client:
+                create = True
+                user = User()
+            else:
+                user = user_to_client.user
+        else:
+            try:
+                User.objects.get(email=whmcs_client.email)
+                raise DBSyncException('User %s already exists in Fleio database.' % whmcs_client.email)
+            except User.DoesNotExist:
+                create = True
+                user = User()
+                client = Client()
 
-    user.username = whmcs_client.email
-    user.password = whmcs_client.password
-    user.first_name = whmcs_client.firstname[:30]
-    user.last_name = whmcs_client.lastname[:150]
-    user.email = whmcs_client.email
-    user.last_login = whmcs_client.lastlogin
+    user_fields_to_sync = []
+    if create:
+        # don't change these fields if we only update the user
+        user_fields_to_sync.append(UserField(fleio_key='email', whmcs_key='email', fleio_max_length=254))
+        user_fields_to_sync.append(UserField(fleio_key='username', whmcs_key='email', fleio_max_length=150))
+        user_fields_to_sync.append(UserField(fleio_key='password', whmcs_key='password'))
+    user_fields_to_sync.append(UserField(fleio_key='first_name', whmcs_key='firstname', fleio_max_length=150))
+    user_fields_to_sync.append(UserField(fleio_key='last_name', whmcs_key='lastname', fleio_max_length=150))
+    user_fields_to_sync.append(UserField(fleio_key='last_login', whmcs_key='lastlogin'))
     user.is_active = 'Active' in whmcs_client.status
+    # process user fields
+    sync_fields(fleio_record=user, whmcs_record=whmcs_client, fields_to_sync=user_fields_to_sync)
 
-    client.first_name = whmcs_client.firstname[:127]
-    client.last_name = whmcs_client.lastname[:127]
-    client.company = whmcs_client.companyname[:127]
-    client.address1 = whmcs_client.address1
-    client.address2 = whmcs_client.address2
-    client.city = whmcs_client.city
-    client.country = whmcs_client.country
-    client.state = whmcs_client.state
-    client.zip_code = whmcs_client.postcode[:10]
-    client.phone = whmcs_client.phonenumber
-    client.email = whmcs_client.email
-    client.created_at = whmcs_client.created_at
-    client.tax_exempt = whmcs_client.taxexempt
-    client.status = whmcs_client.status.lower()
+    # process client fields
+    sync_fields(fleio_record=client, whmcs_record=whmcs_client, fields_to_sync=CLIENT_FIELDS_TO_SYNC)
+
+    whmcs_status_to_fleio = whmcs_client.status.lower()
+    if whmcs_status_to_fleio not in ClientStatus.name_map.keys():
+        LOG.warning(
+            'WHMCS client {} status not compatible with Fleio statuses. Fallback on inactive status.'.format(id)
+        )
+        whmcs_status_to_fleio = ClientStatus.inactive
+    client.status = whmcs_status_to_fleio
+
     client.currency = match_currency(whmcs_client)
     client.uptodate_credit = decimal.Decimal('0.00')
 
-    if whmcs_client.datecreated:
+    if whmcs_client.created_at:
+        user.date_joined = whmcs_client.created_at
+        client.date_created = whmcs_client.created_at
+    elif whmcs_client.datecreated:
         whmcs_date_created = datetime.combine(whmcs_client.datecreated, datetime.min.time())
         whmcs_date_created = timezone.make_aware(whmcs_date_created, timezone=timezone.utc)
         user.date_joined = whmcs_date_created
         client.date_created = whmcs_date_created
-    elif whmcs_client.created_at:
-        user.date_joined = whmcs_client.created_at
-        client.date_created = whmcs_client.created_at
 
     with transaction.atomic():
         user.save()
@@ -88,6 +142,7 @@ def sync_client(id, whmcs_client=None):
             usertoclient = UserToClient()
             usertoclient.user = user
             usertoclient.client = client
+            # owner role should be automatically added
             usertoclient.save()
             synced_client = SyncedAccount()
             synced_client.whmcs_id = whmcs_client.id
@@ -100,18 +155,23 @@ def sync_client(id, whmcs_client=None):
     return whmcs_client.id
 
 
-def sync_all_clients(fail_fast):
+def sync_clients(fail_fast, whmcs_ids=None, active_only=False):
     """Synchronizes all WHMCS clients and users."""
     exception_list = []
     client_list = []
-    for client in Tblclients.objects.all():
+    qs = Tblclients.objects.all()
+    if whmcs_ids and isinstance(whmcs_ids, list) and len(whmcs_ids):
+        qs = qs.filter(id__in=whmcs_ids)
+    if active_only:
+        qs = qs.filter(status='Active')
+    for client in qs:
         try:
             synced_id = sync_client(id=client.id, whmcs_client=client)
             client_list.append('{} {} - {} (ID: {})'.format(client.firstname,
                                                             client.lastname,
                                                             client.companyname,
                                                             synced_id))
-        except DBSyncException as ex:
+        except Exception as ex:
             LOG.exception(ex)
             if fail_fast:
                 exception_list.append(ex)

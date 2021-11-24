@@ -2,7 +2,7 @@
 # You'll have to do the following manually to clean this up:
 #   * Rearrange models' order
 #   * Make sure each model has one field with primary_key=True
-#   * Make sure each ForeignKey has `on_delete` set to the desired behavior.
+#   * Make sure each ForeignKey and OneToOneField has `on_delete` set to the desired behavior
 #   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
 # Feel free to rename the models, but don't rename db_table values or field names.
 from django.db import models
@@ -33,10 +33,10 @@ class Tblaccounts(models.Model):
     gateway = models.TextField()
     date = models.DateTimeField(blank=True, null=True)
     description = models.TextField()
-    amountin = models.DecimalField(max_digits=10, decimal_places=2)
-    fees = models.DecimalField(max_digits=10, decimal_places=2)
-    amountout = models.DecimalField(max_digits=10, decimal_places=2)
-    rate = models.DecimalField(max_digits=10, decimal_places=5)
+    amountin = models.DecimalField(max_digits=16, decimal_places=2)
+    fees = models.DecimalField(max_digits=16, decimal_places=2)
+    amountout = models.DecimalField(max_digits=16, decimal_places=2)
+    rate = models.DecimalField(max_digits=16, decimal_places=5)
     transid = models.TextField()
     invoiceid = models.IntegerField()
     refundid = models.IntegerField()
@@ -51,6 +51,8 @@ class Tblactivitylog(models.Model):
     description = models.TextField()
     user = models.TextField()
     userid = models.IntegerField()
+    user_id = models.PositiveIntegerField()
+    admin_id = models.PositiveIntegerField()
     ipaddr = models.TextField()
 
     class Meta:
@@ -73,8 +75,11 @@ class Tbladdons(models.Model):
     name = models.TextField()
     description = models.TextField()
     billingcycle = models.TextField()
+    allowqty = models.PositiveIntegerField()
     tax = models.IntegerField()
     showorder = models.IntegerField()
+    hidden = models.IntegerField()
+    retired = models.IntegerField()
     downloads = models.TextField()
     autoactivate = models.TextField()
     suspendproduct = models.IntegerField()
@@ -82,6 +87,7 @@ class Tbladdons(models.Model):
     type = models.CharField(max_length=16)
     module = models.CharField(max_length=32)
     server_group_id = models.IntegerField()
+    prorate = models.IntegerField()
     weight = models.IntegerField()
     autolinkby = models.TextField()
     created_at = models.DateTimeField()
@@ -151,6 +157,8 @@ class Tbladmins(models.Model):
     password_reset_data = models.TextField()
     password_reset_expiry = models.DateTimeField()
     hidden_widgets = models.TextField()
+    widget_order = models.TextField()
+    user_preferences = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -170,15 +178,14 @@ class Tbladminsecurityquestions(models.Model):
 
 
 class Tblaffiliates(models.Model):
-    id = models.AutoField()
     date = models.DateField(blank=True, null=True)
     clientid = models.IntegerField()
     visitors = models.IntegerField()
     paytype = models.TextField()
-    payamount = models.DecimalField(max_digits=10, decimal_places=2)
+    payamount = models.DecimalField(max_digits=16, decimal_places=2)
     onetime = models.IntegerField()
-    balance = models.DecimalField(max_digits=10, decimal_places=2)
-    withdrawn = models.DecimalField(max_digits=10, decimal_places=2)
+    balance = models.DecimalField(max_digits=16, decimal_places=2)
+    withdrawn = models.DecimalField(max_digits=16, decimal_places=2)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -187,10 +194,33 @@ class Tblaffiliates(models.Model):
         db_table = 'tblaffiliates'
 
 
+class TblaffiliatesHits(models.Model):
+    affiliate_id = models.PositiveIntegerField()
+    referrer_id = models.PositiveIntegerField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblaffiliates_hits'
+
+
+class TblaffiliatesReferrers(models.Model):
+    affiliate_id = models.PositiveIntegerField()
+    referrer = models.CharField(max_length=500)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblaffiliates_referrers'
+
+
 class Tblaffiliatesaccounts(models.Model):
     affiliateid = models.IntegerField()
     relid = models.IntegerField()
     lastpaid = models.DateField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
@@ -201,8 +231,11 @@ class Tblaffiliateshistory(models.Model):
     affiliateid = models.IntegerField()
     date = models.DateField()
     affaccid = models.IntegerField()
+    invoice_id = models.PositiveIntegerField()
     description = models.TextField()
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
@@ -211,8 +244,11 @@ class Tblaffiliateshistory(models.Model):
 
 class Tblaffiliatespending(models.Model):
     affaccid = models.IntegerField()
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    invoice_id = models.PositiveIntegerField()
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
     clearingdate = models.DateField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
@@ -222,7 +258,9 @@ class Tblaffiliatespending(models.Model):
 class Tblaffiliateswithdrawals(models.Model):
     affiliateid = models.IntegerField()
     date = models.DateField()
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
@@ -312,6 +350,7 @@ class TblapplinksLog(models.Model):
 class TblauthnAccountLinks(models.Model):
     provider = models.CharField(max_length=32)
     remote_user_id = models.CharField(max_length=255, blank=True, null=True)
+    user_id = models.IntegerField(blank=True, null=True)
     client_id = models.IntegerField(blank=True, null=True)
     contact_id = models.IntegerField(blank=True, null=True)
     metadata = models.TextField(blank=True, null=True)
@@ -337,6 +376,20 @@ class TblauthnConfig(models.Model):
         unique_together = (('provider', 'setting'),)
 
 
+class Tblbankaccts(models.Model):
+    pay_method_id = models.IntegerField()
+    bank_name = models.CharField(max_length=255)
+    acct_type = models.CharField(max_length=255)
+    bank_data = models.TextField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblbankaccts'
+
+
 class Tblbannedemails(models.Model):
     domain = models.TextField()
     count = models.IntegerField()
@@ -360,11 +413,12 @@ class Tblbillableitems(models.Model):
     userid = models.IntegerField()
     description = models.TextField()
     hours = models.DecimalField(max_digits=5, decimal_places=1)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
     recur = models.IntegerField()
     recurcycle = models.TextField()
     recurfor = models.IntegerField()
     invoiceaction = models.IntegerField()
+    unit = models.IntegerField()
     duedate = models.DateField()
     invoicecount = models.IntegerField()
 
@@ -384,7 +438,7 @@ class Tblbundles(models.Model):
     showgroup = models.IntegerField()
     gid = models.IntegerField()
     description = models.TextField()
-    displayprice = models.DecimalField(max_digits=10, decimal_places=2)
+    displayprice = models.DecimalField(max_digits=16, decimal_places=2)
     sortorder = models.IntegerField()
     is_featured = models.IntegerField()
 
@@ -405,6 +459,28 @@ class Tblcalendar(models.Model):
     class Meta:
         managed = False
         db_table = 'tblcalendar'
+
+
+class Tblcampaigns(models.Model):
+    admin_id = models.PositiveIntegerField()
+    name = models.CharField(max_length=250)
+    configuration = models.TextField(blank=True, null=True)
+    message_data = models.TextField(blank=True, null=True)
+    sending_start_at = models.DateTimeField(blank=True, null=True)
+    draft = models.IntegerField()
+    started = models.IntegerField()
+    paused = models.IntegerField()
+    position = models.PositiveIntegerField()
+    completed = models.IntegerField()
+    completed_at = models.DateTimeField(blank=True, null=True)
+    queue_completed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblcampaigns'
 
 
 class Tblcancelrequests(models.Model):
@@ -445,12 +521,13 @@ class Tblclients(models.Model):
     postcode = models.TextField()
     country = models.TextField()
     phonenumber = models.TextField()
+    tax_id = models.CharField(max_length=128)
     password = models.TextField()
     authmodule = models.TextField()
     authdata = models.TextField()
     currency = models.IntegerField()
     defaultgateway = models.TextField()
-    credit = models.DecimalField(max_digits=10, decimal_places=2)
+    credit = models.DecimalField(max_digits=16, decimal_places=2)
     taxexempt = models.IntegerField()
     latefeeoveride = models.IntegerField()
     overideduenotices = models.IntegerField()
@@ -480,9 +557,11 @@ class Tblclients(models.Model):
     language = models.TextField()
     pwresetkey = models.TextField()
     emailoptout = models.IntegerField()
+    marketing_emails_opt_in = models.PositiveIntegerField()
     overrideautoclose = models.IntegerField()
     allow_sso = models.IntegerField()
     email_verified = models.IntegerField()
+    email_preferences = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
     pwresetexpiry = models.DateTimeField()
@@ -505,7 +584,7 @@ class Tblclientsfiles(models.Model):
 
 
 class Tblconfiguration(models.Model):
-    setting = models.TextField()
+    setting = models.CharField(unique=True, max_length=64)
     value = models.TextField()
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
@@ -528,6 +607,7 @@ class Tblcontacts(models.Model):
     postcode = models.TextField()
     country = models.TextField()
     phonenumber = models.TextField()
+    tax_id = models.CharField(max_length=128)
     subaccount = models.IntegerField()
     password = models.TextField()
     permissions = models.TextField()
@@ -549,14 +629,30 @@ class Tblcontacts(models.Model):
 
 class Tblcredit(models.Model):
     clientid = models.IntegerField()
+    admin_id = models.PositiveIntegerField()
     date = models.DateField()
     description = models.TextField()
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
     relid = models.IntegerField()
 
     class Meta:
         managed = False
         db_table = 'tblcredit'
+
+
+class Tblcreditcards(models.Model):
+    pay_method_id = models.IntegerField()
+    card_type = models.CharField(max_length=255)
+    last_four = models.CharField(max_length=255)
+    expiry_date = models.DateTimeField()
+    card_data = models.TextField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblcreditcards'
 
 
 class Tblcurrencies(models.Model):
@@ -637,13 +733,19 @@ class TbldomainLookupConfiguration(models.Model):
 
 class Tbldomainpricing(models.Model):
     extension = models.TextField()
-    dnsmanagement = models.TextField()
-    emailforwarding = models.TextField()
-    idprotection = models.TextField()
-    eppcode = models.TextField()
+    dnsmanagement = models.IntegerField()
+    emailforwarding = models.IntegerField()
+    idprotection = models.IntegerField()
+    eppcode = models.IntegerField()
     autoreg = models.TextField()
     order = models.IntegerField()
     group = models.CharField(max_length=5)
+    grace_period = models.IntegerField()
+    grace_period_fee = models.DecimalField(max_digits=16, decimal_places=2)
+    redemption_grace_period = models.IntegerField()
+    redemption_grace_period_fee = models.DecimalField(max_digits=16, decimal_places=2)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
@@ -651,7 +753,7 @@ class Tbldomainpricing(models.Model):
 
 
 class TbldomainpricingPremium(models.Model):
-    to_amount = models.DecimalField(unique=True, max_digits=10, decimal_places=2)
+    to_amount = models.DecimalField(unique=True, max_digits=16, decimal_places=2)
     markup = models.DecimalField(max_digits=8, decimal_places=5)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
@@ -679,14 +781,14 @@ class Tbldomains(models.Model):
     type = models.CharField(max_length=8)
     registrationdate = models.DateField()
     domain = models.TextField()
-    firstpaymentamount = models.DecimalField(max_digits=10, decimal_places=2)
-    recurringamount = models.DecimalField(max_digits=10, decimal_places=2)
+    firstpaymentamount = models.DecimalField(max_digits=16, decimal_places=2)
+    recurringamount = models.DecimalField(max_digits=16, decimal_places=2)
     registrar = models.TextField()
     registrationperiod = models.IntegerField()
     expirydate = models.DateField(blank=True, null=True)
     subscriptionid = models.TextField()
     promoid = models.IntegerField()
-    status = models.CharField(max_length=16)
+    status = models.CharField(max_length=20)
     nextduedate = models.DateField()
     nextinvoicedate = models.DateField()
     additionalnotes = models.TextField()
@@ -776,16 +878,41 @@ class TbldynamicTranslations(models.Model):
         db_table = 'tbldynamic_translations'
 
 
+class TblemailImages(models.Model):
+    filename = models.CharField(max_length=128)
+    original_name = models.CharField(max_length=128)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblemail_images'
+
+
 class Tblemailmarketer(models.Model):
     name = models.TextField()
     type = models.TextField()
     settings = models.TextField()
     disable = models.IntegerField()
     marketing = models.IntegerField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
         db_table = 'tblemailmarketer'
+
+
+class TblemailmarketerRelatedPivot(models.Model):
+    task_id = models.PositiveIntegerField()
+    product_id = models.PositiveIntegerField()
+    addon_id = models.PositiveIntegerField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblemailmarketer_related_pivot'
 
 
 class Tblemails(models.Model):
@@ -796,6 +923,15 @@ class Tblemails(models.Model):
     to = models.TextField(blank=True, null=True)
     cc = models.TextField(blank=True, null=True)
     bcc = models.TextField(blank=True, null=True)
+    attachments = models.TextField(blank=True, null=True)
+    pending = models.IntegerField()
+    message_data = models.TextField(blank=True, null=True)
+    failed = models.IntegerField()
+    failure_reason = models.CharField(max_length=250)
+    retry_count = models.IntegerField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    campaign_id = models.IntegerField()
 
     class Meta:
         managed = False
@@ -824,6 +960,49 @@ class Tblemailtemplates(models.Model):
         db_table = 'tblemailtemplates'
 
 
+class Tblerrorlog(models.Model):
+    severity = models.CharField(max_length=16)
+    exception_class = models.CharField(max_length=255, blank=True, null=True)
+    message = models.CharField(max_length=255, blank=True, null=True)
+    filename = models.CharField(max_length=255, blank=True, null=True)
+    line = models.PositiveIntegerField(blank=True, null=True)
+    details = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblerrorlog'
+
+
+class Tblfileassetmigrationprogress(models.Model):
+    asset_type = models.CharField(unique=True, max_length=64)
+    migrated_objects = models.TextField()
+    num_objects_migrated = models.PositiveIntegerField(blank=True, null=True)
+    num_objects_total = models.PositiveIntegerField(blank=True, null=True)
+    active = models.PositiveIntegerField(blank=True, null=True)
+    num_failures = models.PositiveIntegerField(blank=True, null=True)
+    last_failure_reason = models.TextField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblfileassetmigrationprogress'
+
+
+class Tblfileassetsettings(models.Model):
+    asset_type = models.CharField(unique=True, max_length=64)
+    storageconfiguration_id = models.PositiveIntegerField()
+    migratetoconfiguration_id = models.PositiveIntegerField(blank=True, null=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblfileassetsettings'
+
+
 class Tblfraud(models.Model):
     fraud = models.TextField()
     setting = models.TextField()
@@ -838,6 +1017,7 @@ class Tblgatewaylog(models.Model):
     date = models.DateTimeField()
     gateway = models.TextField()
     data = models.TextField()
+    transaction_history_id = models.PositiveIntegerField()
     result = models.TextField()
 
     class Meta:
@@ -853,8 +1033,9 @@ class Tblhosting(models.Model):
     regdate = models.DateField()
     domain = models.TextField()
     paymentmethod = models.TextField()
-    firstpaymentamount = models.DecimalField(max_digits=10, decimal_places=2)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    qty = models.PositiveIntegerField()
+    firstpaymentamount = models.DecimalField(max_digits=16, decimal_places=2)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
     billingcycle = models.TextField()
     nextduedate = models.DateField(blank=True, null=True)
     nextinvoicedate = models.DateField()
@@ -866,6 +1047,7 @@ class Tblhosting(models.Model):
     notes = models.TextField()
     subscriptionid = models.TextField()
     promoid = models.IntegerField()
+    promocount = models.IntegerField(blank=True, null=True)
     suspendreason = models.TextField()
     overideautosuspend = models.IntegerField()
     overidesuspenduntil = models.DateField()
@@ -893,8 +1075,10 @@ class Tblhostingaddons(models.Model):
     userid = models.IntegerField()
     server = models.IntegerField()
     name = models.TextField()
-    setupfee = models.DecimalField(max_digits=10, decimal_places=2)
-    recurring = models.DecimalField(max_digits=10, decimal_places=2)
+    qty = models.PositiveIntegerField()
+    firstpaymentamount = models.DecimalField(max_digits=16, decimal_places=2)
+    setupfee = models.DecimalField(max_digits=16, decimal_places=2)
+    recurring = models.DecimalField(max_digits=16, decimal_places=2)
     billingcycle = models.TextField()
     tax = models.TextField()
     status = models.CharField(max_length=10)
@@ -902,8 +1086,10 @@ class Tblhostingaddons(models.Model):
     nextduedate = models.DateField(blank=True, null=True)
     nextinvoicedate = models.DateField()
     termination_date = models.DateField()
+    proratadate = models.DateField()
     paymentmethod = models.TextField()
     notes = models.TextField()
+    subscriptionid = models.CharField(max_length=128)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -923,13 +1109,24 @@ class Tblhostingconfigoptions(models.Model):
         db_table = 'tblhostingconfigoptions'
 
 
+class Tblinvoicedata(models.Model):
+    invoice_id = models.PositiveIntegerField(unique=True)
+    country = models.CharField(max_length=2)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblinvoicedata'
+
+
 class Tblinvoiceitems(models.Model):
     invoiceid = models.IntegerField()
     userid = models.IntegerField()
     type = models.CharField(max_length=30)
     relid = models.IntegerField()
     description = models.TextField()
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
     taxed = models.IntegerField()
     duedate = models.DateField(blank=True, null=True)
     paymentmethod = models.TextField()
@@ -947,20 +1144,38 @@ class Tblinvoices(models.Model):
     duedate = models.DateField(blank=True, null=True)
     datepaid = models.DateTimeField()
     last_capture_attempt = models.DateTimeField()
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
-    credit = models.DecimalField(max_digits=10, decimal_places=2)
-    tax = models.DecimalField(max_digits=10, decimal_places=2)
-    tax2 = models.DecimalField(max_digits=10, decimal_places=2)
-    total = models.DecimalField(max_digits=10, decimal_places=2)
-    taxrate = models.DecimalField(max_digits=10, decimal_places=2)
-    taxrate2 = models.DecimalField(max_digits=10, decimal_places=2)
+    date_refunded = models.DateTimeField()
+    date_cancelled = models.DateTimeField()
+    subtotal = models.DecimalField(max_digits=16, decimal_places=2)
+    credit = models.DecimalField(max_digits=16, decimal_places=2)
+    tax = models.DecimalField(max_digits=16, decimal_places=2)
+    tax2 = models.DecimalField(max_digits=16, decimal_places=2)
+    total = models.DecimalField(max_digits=16, decimal_places=2)
+    taxrate = models.DecimalField(max_digits=10, decimal_places=3)
+    taxrate2 = models.DecimalField(max_digits=10, decimal_places=3)
     status = models.TextField()
     paymentmethod = models.TextField()
+    paymethodid = models.PositiveIntegerField(blank=True, null=True)
     notes = models.TextField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
         db_table = 'tblinvoices'
+
+
+class TblioncubeFileLog(models.Model):
+    filename = models.TextField()
+    content_hash = models.CharField(max_length=512)
+    encoder_version = models.CharField(max_length=16)
+    bundled_php_versions = models.CharField(max_length=128)
+    loaded_in_php = models.CharField(max_length=128)
+    target_php_version = models.CharField(max_length=16)
+
+    class Meta:
+        managed = False
+        db_table = 'tblioncube_file_log'
 
 
 class TbljobsQueue(models.Model):
@@ -992,6 +1207,17 @@ class Tblknowledgebase(models.Model):
     class Meta:
         managed = False
         db_table = 'tblknowledgebase'
+
+
+class TblknowledgebaseImages(models.Model):
+    filename = models.CharField(max_length=128)
+    original_name = models.CharField(max_length=128)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblknowledgebase_images'
 
 
 class Tblknowledgebasecats(models.Model):
@@ -1060,6 +1286,34 @@ class TblmarketconnectServices(models.Model):
         db_table = 'tblmarketconnect_services'
 
 
+class TblmarketingConsent(models.Model):
+    userid = models.PositiveIntegerField()
+    opt_in = models.IntegerField()
+    admin = models.IntegerField()
+    ip_address = models.CharField(max_length=32)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblmarketing_consent'
+
+
+class TblmetricUsage(models.Model):
+    rel_type = models.CharField(max_length=200)
+    rel_id = models.IntegerField()
+    module_type = models.CharField(max_length=200)
+    module = models.CharField(max_length=200)
+    metric = models.CharField(max_length=200)
+    value = models.CharField(max_length=255)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblmetric_usage'
+
+
 class TblmoduleConfiguration(models.Model):
     entity_type = models.CharField(max_length=8)
     entity_id = models.PositiveIntegerField()
@@ -1106,7 +1360,7 @@ class Tblmodulequeue(models.Model):
 
 
 class Tblnetworkissues(models.Model):
-    title = models.CharField(max_length=45)
+    title = models.CharField(max_length=150)
     description = models.TextField()
     type = models.CharField(max_length=6)
     affecting = models.CharField(max_length=100, blank=True, null=True)
@@ -1278,6 +1532,8 @@ class Tblorders(models.Model):
     ordernum = models.BigIntegerField()
     userid = models.IntegerField()
     contactid = models.IntegerField()
+    requestor_id = models.PositiveIntegerField()
+    admin_requestor_id = models.PositiveIntegerField()
     date = models.DateTimeField()
     nameservers = models.TextField()
     transfersecret = models.TextField()
@@ -1286,7 +1542,7 @@ class Tblorders(models.Model):
     promotype = models.TextField()
     promovalue = models.TextField()
     orderdata = models.TextField()
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
     paymentmethod = models.TextField()
     invoiceid = models.IntegerField()
     status = models.TextField()
@@ -1324,26 +1580,72 @@ class Tblpaymentgateways(models.Model):
         db_table = 'tblpaymentgateways'
 
 
+class TblpaymentgatewaysProductMapping(models.Model):
+    gateway = models.CharField(max_length=255)
+    account_identifier = models.CharField(max_length=255)
+    product_identifier = models.CharField(max_length=255)
+    remote_identifier = models.CharField(max_length=255)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblpaymentgateways_product_mapping'
+
+
+class Tblpaymethods(models.Model):
+    userid = models.IntegerField()
+    description = models.CharField(max_length=255)
+    contact_id = models.IntegerField()
+    contact_type = models.CharField(max_length=255)
+    payment_id = models.IntegerField()
+    payment_type = models.CharField(max_length=255)
+    gateway_name = models.CharField(max_length=255)
+    order_preference = models.IntegerField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblpaymethods'
+
+
 class Tblpricing(models.Model):
     type = models.CharField(max_length=14)
     currency = models.IntegerField()
     relid = models.IntegerField()
-    msetupfee = models.DecimalField(max_digits=10, decimal_places=2)
-    qsetupfee = models.DecimalField(max_digits=10, decimal_places=2)
-    ssetupfee = models.DecimalField(max_digits=10, decimal_places=2)
-    asetupfee = models.DecimalField(max_digits=10, decimal_places=2)
-    bsetupfee = models.DecimalField(max_digits=10, decimal_places=2)
-    tsetupfee = models.DecimalField(max_digits=10, decimal_places=2)
-    monthly = models.DecimalField(max_digits=10, decimal_places=2)
-    quarterly = models.DecimalField(max_digits=10, decimal_places=2)
-    semiannually = models.DecimalField(max_digits=10, decimal_places=2)
-    annually = models.DecimalField(max_digits=10, decimal_places=2)
-    biennially = models.DecimalField(max_digits=10, decimal_places=2)
-    triennially = models.DecimalField(max_digits=10, decimal_places=2)
+    msetupfee = models.DecimalField(max_digits=16, decimal_places=2)
+    qsetupfee = models.DecimalField(max_digits=16, decimal_places=2)
+    ssetupfee = models.DecimalField(max_digits=16, decimal_places=2)
+    asetupfee = models.DecimalField(max_digits=16, decimal_places=2)
+    bsetupfee = models.DecimalField(max_digits=16, decimal_places=2)
+    tsetupfee = models.DecimalField(max_digits=16, decimal_places=2)
+    monthly = models.DecimalField(max_digits=16, decimal_places=2)
+    quarterly = models.DecimalField(max_digits=16, decimal_places=2)
+    semiannually = models.DecimalField(max_digits=16, decimal_places=2)
+    annually = models.DecimalField(max_digits=16, decimal_places=2)
+    biennially = models.DecimalField(max_digits=16, decimal_places=2)
+    triennially = models.DecimalField(max_digits=16, decimal_places=2)
 
     class Meta:
         managed = False
         db_table = 'tblpricing'
+
+
+class TblpricingBracket(models.Model):
+    floor = models.DecimalField(max_digits=19, decimal_places=6)
+    ceiling = models.DecimalField(max_digits=19, decimal_places=6)
+    rel_type = models.CharField(max_length=200)
+    rel_id = models.CharField(max_length=200)
+    schema_type = models.CharField(max_length=32)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblpricing_bracket'
 
 
 class TblproductDownloads(models.Model):
@@ -1423,8 +1725,24 @@ class Tblproductconfigoptionssub(models.Model):
         db_table = 'tblproductconfigoptionssub'
 
 
+class Tblproducteventactions(models.Model):
+    entity_type = models.CharField(max_length=16)
+    entity_id = models.IntegerField()
+    name = models.CharField(max_length=64)
+    event_name = models.CharField(max_length=32)
+    action = models.CharField(max_length=64)
+    params = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblproducteventactions'
+
+
 class Tblproductgroups(models.Model):
     name = models.TextField()
+    slug = models.CharField(max_length=128)
     headline = models.TextField(blank=True, null=True)
     tagline = models.TextField(blank=True, null=True)
     orderfrmtpl = models.TextField()
@@ -1443,6 +1761,7 @@ class Tblproducts(models.Model):
     type = models.TextField()
     gid = models.IntegerField()
     name = models.TextField()
+    slug = models.CharField(max_length=128)
     description = models.TextField()
     hidden = models.IntegerField()
     showdomainoptions = models.IntegerField()
@@ -1499,7 +1818,7 @@ class Tblproducts(models.Model):
     tax = models.IntegerField()
     affiliateonetime = models.IntegerField()
     affiliatepaytype = models.TextField()
-    affiliatepayamount = models.DecimalField(max_digits=10, decimal_places=2)
+    affiliatepayamount = models.DecimalField(max_digits=16, decimal_places=2)
     order = models.IntegerField()
     retired = models.IntegerField()
     is_featured = models.IntegerField()
@@ -1511,11 +1830,38 @@ class Tblproducts(models.Model):
         db_table = 'tblproducts'
 
 
+class TblproductsSlugs(models.Model):
+    product_id = models.PositiveIntegerField()
+    group_id = models.PositiveIntegerField()
+    group_slug = models.CharField(max_length=255)
+    slug = models.CharField(max_length=255)
+    active = models.PositiveIntegerField()
+    clicks = models.PositiveIntegerField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblproducts_slugs'
+
+
+class TblproductsSlugsTracking(models.Model):
+    slug_id = models.PositiveIntegerField()
+    date = models.DateField()
+    clicks = models.PositiveIntegerField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblproducts_slugs_tracking'
+
+
 class Tblpromotions(models.Model):
     code = models.TextField()
     type = models.TextField()
     recurring = models.IntegerField(blank=True, null=True)
-    value = models.DecimalField(max_digits=10, decimal_places=2)
+    value = models.DecimalField(max_digits=16, decimal_places=2)
     cycles = models.TextField()
     appliesto = models.TextField()
     requires = models.TextField()
@@ -1543,8 +1889,8 @@ class Tblquoteitems(models.Model):
     quoteid = models.IntegerField()
     description = models.TextField()
     quantity = models.TextField()
-    unitprice = models.DecimalField(max_digits=10, decimal_places=2)
-    discount = models.DecimalField(max_digits=10, decimal_places=2)
+    unitprice = models.DecimalField(max_digits=16, decimal_places=2)
+    discount = models.DecimalField(max_digits=16, decimal_places=2)
     taxable = models.IntegerField()
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
@@ -1570,11 +1916,12 @@ class Tblquotes(models.Model):
     postcode = models.TextField()
     country = models.TextField()
     phonenumber = models.TextField()
+    tax_id = models.CharField(max_length=128)
     currency = models.IntegerField()
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
-    tax1 = models.DecimalField(max_digits=10, decimal_places=2)
-    tax2 = models.DecimalField(max_digits=10, decimal_places=2)
-    total = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(max_digits=16, decimal_places=2)
+    tax1 = models.DecimalField(max_digits=16, decimal_places=2)
+    tax2 = models.DecimalField(max_digits=16, decimal_places=2)
+    total = models.DecimalField(max_digits=16, decimal_places=2)
     proposal = models.TextField()
     customernotes = models.TextField()
     adminnotes = models.TextField()
@@ -1613,6 +1960,17 @@ class Tblrsakeypairs(models.Model):
         db_table = 'tblrsakeypairs'
 
 
+class TblserverTenants(models.Model):
+    server_id = models.IntegerField()
+    tenant = models.CharField(max_length=255)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblserver_tenants'
+
+
 class Tblservergroups(models.Model):
     name = models.TextField()
     filltype = models.IntegerField()
@@ -1636,7 +1994,7 @@ class Tblservers(models.Model):
     ipaddress = models.TextField()
     assignedips = models.TextField()
     hostname = models.TextField()
-    monthlycost = models.DecimalField(max_digits=10, decimal_places=2)
+    monthlycost = models.DecimalField(max_digits=16, decimal_places=2)
     noc = models.TextField()
     statusaddress = models.TextField()
     nameserver1 = models.TextField()
@@ -1664,6 +2022,18 @@ class Tblservers(models.Model):
         db_table = 'tblservers'
 
 
+class TblserversRemote(models.Model):
+    server_id = models.IntegerField()
+    num_accounts = models.IntegerField()
+    meta_data = models.TextField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblservers_remote'
+
+
 class Tblserversssoperms(models.Model):
     server_id = models.IntegerField()
     role_id = models.IntegerField()
@@ -1671,6 +2041,17 @@ class Tblserversssoperms(models.Model):
     class Meta:
         managed = False
         db_table = 'tblserversssoperms'
+
+
+class Tblsessions(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    session_id = models.CharField(unique=True, max_length=255)
+    payload = models.TextField()
+    last_activity = models.PositiveIntegerField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblsessions'
 
 
 class Tblsslorders(models.Model):
@@ -1681,12 +2062,47 @@ class Tblsslorders(models.Model):
     module = models.TextField()
     certtype = models.TextField()
     configdata = models.TextField()
+    authdata = models.TextField(blank=True, null=True)
     completiondate = models.DateTimeField()
     status = models.TextField()
 
     class Meta:
         managed = False
         db_table = 'tblsslorders'
+
+
+class Tblsslstatus(models.Model):
+    user_id = models.PositiveIntegerField()
+    domain_name = models.CharField(max_length=128)
+    subject_name = models.CharField(max_length=128, blank=True, null=True)
+    subject_org = models.CharField(max_length=128, blank=True, null=True)
+    issuer_name = models.CharField(max_length=128, blank=True, null=True)
+    issuer_org = models.CharField(max_length=128, blank=True, null=True)
+    start_date = models.DateTimeField(blank=True, null=True)
+    expiry_date = models.DateTimeField(blank=True, null=True)
+    active = models.IntegerField()
+    last_synced_date = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblsslstatus'
+
+
+class Tblstorageconfigurations(models.Model):
+    name = models.CharField(unique=True, max_length=255)
+    handler = models.CharField(max_length=255)
+    settings = models.TextField()
+    last_error = models.TextField(blank=True, null=True)
+    is_local = models.PositiveIntegerField()
+    sort_order = models.PositiveIntegerField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tblstorageconfigurations'
 
 
 class Tbltask(models.Model):
@@ -1723,11 +2139,26 @@ class Tbltax(models.Model):
     name = models.TextField()
     state = models.TextField()
     country = models.TextField()
-    taxrate = models.DecimalField(max_digits=10, decimal_places=2)
+    taxrate = models.DecimalField(max_digits=10, decimal_places=3)
 
     class Meta:
         managed = False
         db_table = 'tbltax'
+
+
+class TbltenantStats(models.Model):
+    tenant_id = models.IntegerField()
+    metric = models.CharField(max_length=255)
+    type = models.CharField(max_length=255)
+    value = models.DecimalField(max_digits=19, decimal_places=6)
+    measured_at = models.DecimalField(max_digits=18, decimal_places=6)
+    invoice_id = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tbltenant_stats'
 
 
 class TblticketWatchers(models.Model):
@@ -1763,6 +2194,7 @@ class Tblticketdepartments(models.Model):
     port = models.TextField()
     login = models.TextField()
     password = models.TextField()
+    mail_auth_config = models.TextField(blank=True, null=True)
     feedback_request = models.IntegerField()
 
     class Meta:
@@ -1815,11 +2247,13 @@ class Tblticketlog(models.Model):
 class Tblticketmaillog(models.Model):
     date = models.DateTimeField()
     to = models.TextField()
+    cc = models.TextField()
     name = models.TextField()
     email = models.TextField()
     subject = models.TextField()
     message = models.TextField()
     status = models.TextField()
+    attachment = models.TextField()
 
     class Meta:
         managed = False
@@ -1832,6 +2266,7 @@ class Tblticketnotes(models.Model):
     date = models.DateTimeField()
     message = models.TextField()
     attachments = models.TextField()
+    attachments_removed = models.IntegerField()
     editor = models.CharField(max_length=8)
 
     class Meta:
@@ -1862,12 +2297,14 @@ class Tblticketreplies(models.Model):
     tid = models.IntegerField()
     userid = models.IntegerField()
     contactid = models.IntegerField()
+    requestor_id = models.PositiveIntegerField()
     name = models.TextField()
     email = models.TextField()
     date = models.DateTimeField()
     message = models.TextField()
     admin = models.TextField()
     attachment = models.TextField()
+    attachments_removed = models.IntegerField()
     rating = models.IntegerField()
     editor = models.CharField(max_length=8)
 
@@ -1881,10 +2318,12 @@ class Tbltickets(models.Model):
     did = models.IntegerField()
     userid = models.IntegerField()
     contactid = models.IntegerField()
+    requestor_id = models.PositiveIntegerField()
     name = models.TextField()
     email = models.TextField()
     cc = models.TextField()
     c = models.TextField()
+    ipaddress = models.CharField(max_length=64, blank=True, null=True)
     date = models.DateTimeField()
     title = models.TextField()
     message = models.TextField()
@@ -1892,6 +2331,7 @@ class Tbltickets(models.Model):
     urgency = models.TextField()
     admin = models.TextField()
     attachment = models.TextField()
+    attachments_removed = models.IntegerField()
     lastreply = models.DateTimeField()
     flag = models.IntegerField()
     clientunread = models.IntegerField()
@@ -1901,6 +2341,7 @@ class Tbltickets(models.Model):
     service = models.TextField()
     merged_ticket_id = models.IntegerField()
     editor = models.CharField(max_length=8)
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
@@ -1938,39 +2379,6 @@ class Tbltickettags(models.Model):
         db_table = 'tbltickettags'
 
 
-class TbltldCategories(models.Model):
-    category = models.CharField(max_length=255)
-    is_primary = models.IntegerField()
-    display_order = models.IntegerField(blank=True, null=True)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
-
-    class Meta:
-        managed = False
-        db_table = 'tbltld_categories'
-
-
-class TbltldCategoryPivot(models.Model):
-    tld_id = models.IntegerField()
-    category_id = models.IntegerField()
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
-
-    class Meta:
-        managed = False
-        db_table = 'tbltld_category_pivot'
-
-
-class Tbltlds(models.Model):
-    tld = models.CharField(max_length=255)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
-
-    class Meta:
-        managed = False
-        db_table = 'tbltlds'
-
-
 class Tbltodolist(models.Model):
     date = models.DateField()
     title = models.TextField()
@@ -1982,6 +2390,24 @@ class Tbltodolist(models.Model):
     class Meta:
         managed = False
         db_table = 'tbltodolist'
+
+
+class TbltransactionHistory(models.Model):
+    invoice_id = models.PositiveIntegerField()
+    gateway = models.CharField(max_length=32)
+    transaction_id = models.CharField(max_length=255)
+    remote_status = models.CharField(max_length=255)
+    completed = models.IntegerField()
+    description = models.CharField(max_length=255)
+    additional_information = models.TextField()
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
+    currency_id = models.PositiveIntegerField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'tbltransaction_history'
 
 
 class Tbltransientdata(models.Model):
@@ -2030,18 +2456,109 @@ class Tblupgrades(models.Model):
     originalvalue = models.TextField()
     newvalue = models.TextField()
     new_cycle = models.CharField(max_length=30)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    credit_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
+    credit_amount = models.DecimalField(max_digits=16, decimal_places=2)
     days_remaining = models.IntegerField()
     total_days_in_cycle = models.IntegerField()
-    new_recurring_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    recurringchange = models.DecimalField(max_digits=10, decimal_places=2)
+    new_recurring_amount = models.DecimalField(max_digits=16, decimal_places=2)
+    recurringchange = models.DecimalField(max_digits=16, decimal_places=2)
     status = models.CharField(max_length=9)
     paid = models.CharField(max_length=1)
 
     class Meta:
         managed = False
         db_table = 'tblupgrades'
+
+
+class TblusageItems(models.Model):
+    rel_type = models.CharField(max_length=200)
+    rel_id = models.IntegerField()
+    module_type = models.CharField(max_length=200)
+    module = models.CharField(max_length=200)
+    metric = models.CharField(max_length=200)
+    included = models.DecimalField(max_digits=19, decimal_places=6)
+    is_hidden = models.IntegerField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblusage_items'
+
+
+class TbluserInvites(models.Model):
+    token = models.CharField(max_length=100)
+    email = models.CharField(max_length=255)
+    client_id = models.PositiveIntegerField()
+    invited_by = models.PositiveIntegerField()
+    invited_by_admin = models.IntegerField()
+    permissions = models.TextField(blank=True, null=True)
+    accepted_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tbluser_invites'
+
+
+class TbluserValidation(models.Model):
+    requestor_id = models.PositiveIntegerField(blank=True, null=True)
+    token = models.CharField(max_length=100, blank=True, null=True)
+    status = models.CharField(max_length=255, blank=True, null=True)
+    submitted_at = models.DateTimeField(blank=True, null=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tbluser_validation'
+
+
+class Tblusers(models.Model):
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+    email = models.CharField(unique=True, max_length=255)
+    password = models.CharField(max_length=255)
+    language = models.CharField(max_length=32)
+    second_factor = models.CharField(max_length=255)
+    second_factor_config = models.TextField(blank=True, null=True)
+    remember_token = models.CharField(max_length=100)
+    reset_token = models.CharField(max_length=100)
+    security_question_id = models.PositiveIntegerField()
+    security_question_answer = models.CharField(max_length=255)
+    last_ip = models.CharField(max_length=64)
+    last_hostname = models.CharField(max_length=255)
+    last_login = models.DateTimeField(blank=True, null=True)
+    email_verification_token = models.CharField(max_length=100)
+    email_verification_token_expiry = models.DateTimeField(blank=True, null=True)
+    email_verified_at = models.DateTimeField(blank=True, null=True)
+    reset_token_expiry = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblusers'
+
+
+class TblusersClients(models.Model):
+    auth_user_id = models.PositiveIntegerField()
+    client_id = models.PositiveIntegerField()
+    invite_id = models.PositiveIntegerField()
+    owner = models.PositiveIntegerField()
+    permissions = models.TextField(blank=True, null=True)
+    last_login = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'tblusers_clients'
+        unique_together = (('auth_user_id', 'client_id'),)
 
 
 class Tblwhoislog(models.Model):
