@@ -11,7 +11,7 @@ from fleio.billing.models import Product
 from fleio.billing.models import Service
 from fleio.billing.models import ServiceHostingAccount
 from fleio.billing.models.calcelation_request import CancellationTypes
-from fleio.billing.settings import CyclePeriods
+from fleio.billing.models.product_cycle_periods import ProductCyclePeriods
 from fleio.billing.settings import ServiceStatus
 from fleio.billing.settings import ServiceSuspendType
 from fleio.core.models import Currency
@@ -158,19 +158,19 @@ def get_whmcs_service_cycle(whmcs_service: Tblhosting, currency: Currency) -> (s
     if whmcs_service.billingcycle.lower() == 'free account' or whmcs_service.amount < 0:
         return fleio_product.cycles.first()  # TODO(tomo): set the smallest cycle not the first
     elif whmcs_service.billingcycle.lower() == 'one time':
-        cycle, multiplier = CyclePeriods.onetime, 1
+        cycle, multiplier = ProductCyclePeriods.onetime, 1
     elif whmcs_service.billingcycle.lower() == 'monthly':
-        cycle, multiplier = CyclePeriods.month, 1
+        cycle, multiplier = ProductCyclePeriods.month, 1
     elif whmcs_service.billingcycle.lower() == 'quarterly':
-        cycle, multiplier = CyclePeriods.month, 3
+        cycle, multiplier = ProductCyclePeriods.month, 3
     elif whmcs_service.billingcycle.lower() == 'semi-annually':
-        cycle, multiplier = CyclePeriods.month, 6
+        cycle, multiplier = ProductCyclePeriods.month, 6
     elif whmcs_service.billingcycle.lower() == 'annually':
-        cycle, multiplier = CyclePeriods.year, 1
+        cycle, multiplier = ProductCyclePeriods.year, 1
     elif whmcs_service.billingcycle.lower() == 'biennially':
-        cycle, multiplier = CyclePeriods.year, 2
+        cycle, multiplier = ProductCyclePeriods.year, 2
     elif whmcs_service.billingcycle.lower() == 'triennially':
-        cycle, multiplier = CyclePeriods.year, 3
+        cycle, multiplier = ProductCyclePeriods.year, 3
     ret_cycle = fleio_product.cycles.get(cycle=cycle, cycle_multiplier=multiplier, currency=currency)
     return ret_cycle
 

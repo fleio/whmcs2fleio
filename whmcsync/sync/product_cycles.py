@@ -1,6 +1,6 @@
 import decimal
 
-from fleio.billing.settings import CyclePeriods
+from fleio.billing.models.product_cycle_periods import ProductCyclePeriods
 from fleio.billing.settings import PublicStatuses
 from fleio.core.models import Currency
 from whmcsync.whmcsync.models import Tblcurrencies
@@ -26,7 +26,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
     whmcs_pricing = Tblpricing.objects.filter(type='product', relid=whmcs_product.id).all()  # multi currency
     for whmcs_price in whmcs_pricing:
         if whmcs_product.paytype == 'ontime':
-            fleio_product.cycles.update_or_create(cycle=CyclePeriods.onetime,
+            fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.onetime,
                                                   cycle_multiplier=1,
                                                   currency=get_whmcs_currency(whmcs_price.currency),
                                                   defaults={
@@ -37,7 +37,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
         elif whmcs_product.paytype == 'recurring':
             # monthly, querterly, semin-anual, anual, bienal, trienal
             if whmcs_price.monthly >= zero:
-                fleio_product.cycles.update_or_create(cycle=CyclePeriods.month,
+                fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.month,
                                                       cycle_multiplier=1,
                                                       currency=get_whmcs_currency(whmcs_price.currency),
                                                       defaults={
@@ -46,7 +46,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
                                                           'is_relative_price': False,
                                                           'status': PublicStatuses.public})
             if whmcs_price.quarterly >= zero:
-                fleio_product.cycles.update_or_create(cycle=CyclePeriods.month,
+                fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.month,
                                                       cycle_multiplier=3,
                                                       currency=get_whmcs_currency(whmcs_price.currency),
                                                       defaults={
@@ -55,7 +55,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
                                                           'is_relative_price': False,
                                                           'status': PublicStatuses.public})
             if whmcs_price.semiannually >= zero:
-                fleio_product.cycles.update_or_create(cycle=CyclePeriods.month,
+                fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.month,
                                                       cycle_multiplier=6,
                                                       currency=get_whmcs_currency(whmcs_price.currency),
                                                       defaults={
@@ -64,7 +64,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
                                                           'is_relative_price': False,
                                                           'status': PublicStatuses.public})
             if whmcs_price.annually >= zero:
-                fleio_product.cycles.update_or_create(cycle=CyclePeriods.year,
+                fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.year,
                                                       cycle_multiplier=1,
                                                       currency=get_whmcs_currency(whmcs_price.currency),
                                                       defaults={
@@ -74,7 +74,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
                                                           'status': PublicStatuses.public}
                                                       )
             if whmcs_price.biennially >= zero:
-                fleio_product.cycles.update_or_create(cycle=CyclePeriods.year,
+                fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.year,
                                                       cycle_multiplier=2,
                                                       currency=get_whmcs_currency(whmcs_price.currency),
                                                       defaults={
@@ -84,7 +84,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
                                                           'status': PublicStatuses.public}
                                                       )
             if whmcs_price.triennially >= zero:
-                fleio_product.cycles.update_or_create(cycle=CyclePeriods.year,
+                fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.year,
                                                       cycle_multiplier=3,
                                                       currency=get_whmcs_currency(whmcs_price.currency),
                                                       defaults={

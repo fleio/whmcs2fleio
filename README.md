@@ -61,8 +61,8 @@ NOTES
 =====
 
 The *whmcs_models.py* file contains the Django models representation from WHMCS.
-If you wish to import additional data, this models will help.
+If you wish to import additional data, these models will help.
 After installing this app, do not forget to run **django migrate** to setup the new whmcsync database in Fleio.
 This database is used to allow authentication for users with their old password.
 
-
+To see import options, activate Fleio environment and run `django whmcsync -h`.

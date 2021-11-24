@@ -22,14 +22,15 @@ def sync_currencies(fail_fast, default=False):
                     fleio_currency.save(update_fields=['is_default', 'rate'])
             currency_list.append(fleio_currency)
         except Exception as e:
+            LOG.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
         else:
             if created:
-                LOG.warning(_('Created currency {} with rate {}').format(whmcs_currency.code, fleio_currency.rate))
+                LOG.info(_('Created currency {} with rate {}').format(whmcs_currency.code, fleio_currency.rate))
             else:
-                LOG.warning(_('Updated currency {} with rate {}').format(whmcs_currency.code, fleio_currency.rate))
+                LOG.info(_('Updated currency {} with rate {}').format(whmcs_currency.code, fleio_currency.rate))
     return currency_list, exception_list
 
 

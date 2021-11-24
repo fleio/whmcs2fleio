@@ -62,8 +62,14 @@ def match_currency(whmcs_client):
     """Return matched currency from fleio or raise exception."""
     try:
         return Currency.objects.get(code=whmcs_client.currency.code)
-    except (Tblcurrencies.DoesNotExist, Currency.DoesNotExist):
-        raise DBSyncException('Cannot match currency for user %s' % whmcs_client.email)
+    except Tblcurrencies.DoesNotExist:
+        raise DBSyncException(
+            'Cannot match currency for WHMCS client {}'.format(whmcs_client.id)
+        )
+    except Currency.DoesNotExist:
+        raise DBSyncException(
+            'Cannot match currency {} for WHMCS client {}'.format(whmcs_client.currency.code, whmcs_client.id)
+        )
 
 
 def sync_client_credit(fleio_client: Client, amount, currency_code):
@@ -89,6 +95,9 @@ def add_client_groups(fleio_client: Client, whmcs_client: Tblclients):
             try:
                 fleio_group = ClientGroup.objects.get(name=whmcs_group.groupname)
             except ClientGroup.DoesNotExist:
-                LOG.warning(_('Unable to sync WHMCS group {}. Missing in Fleio.').format(whmcs_group.groupname))
+                LOG.warning(
+                    _('Unable to sync WHMCS group {} for Fleio client {}. '
+                      'Group is missing in Fleio.').format(whmcs_group.groupname, fleio_client.id)
+                )
             else:
                 fleio_client.groups.add(fleio_group)
