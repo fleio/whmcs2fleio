@@ -1,58 +1,100 @@
 import logging
 
+from django.db import transaction
+
 from fleio.core.models import AppUser
 from fleio.core.models import Client
 from fleio.core.models import UserToClient
 from plugins.domains.models import Contact
 from whmcsync.whmcsync.models import SyncedAccount
 from whmcsync.whmcsync.models import Tblclients
+from .utils import FieldToSync
+from .utils import sync_fields
 from ..models import Tblcontacts
 
 LOG = logging.getLogger('whmcsync')
 
 
+class ClientField(FieldToSync):
+    record_name = 'Contact'
+
+
+CONTACT_FIELDS_TO_SYNC = [
+    ClientField(fleio_key='first_name', whmcs_key='firstname', fleio_max_length=127),
+    ClientField(fleio_key='last_name', whmcs_key='lastname', fleio_max_length=127),
+    ClientField(fleio_key='company', whmcs_key='companyname', fleio_max_length=127),
+    ClientField(fleio_key='address1', whmcs_key='address1', fleio_max_length=255),
+    ClientField(fleio_key='address2', whmcs_key='address2', fleio_max_length=255),
+    ClientField(fleio_key='city', whmcs_key='city', fleio_max_length=127),
+    ClientField(fleio_key='country', whmcs_key='country', fleio_max_length=2),
+    ClientField(fleio_key='state', whmcs_key='state', fleio_max_length=127),
+    ClientField(fleio_key='zip_code', whmcs_key='postcode', fleio_max_length=10),
+    ClientField(fleio_key='phone', whmcs_key='phonenumber', fleio_max_length=64),
+    ClientField(fleio_key='email', whmcs_key='email', fleio_max_length=127),
+    ClientField(fleio_key='vat_id', whmcs_key='tax_id', fleio_max_length=32),
+    ClientField(fleio_key='created_at', whmcs_key='created_at'),
+]
+
+
 def sync_client_contacts(fleio_client: Client, whmcs_client: Tblclients):
     """Place client contacts in client domain contacts and create additional users if contacts have sub accounts"""
+    synced_contacts = 0
     for wcontact in Tblcontacts.objects.filter(userid=whmcs_client.id):
-        try:
-            SyncedAccount.objects.get(whmcs_id=whmcs_client.id, whmcs_uuid=whmcs_client.uuid)
-        except SyncedAccount.DoesNotExist:
-            LOG.debug('Skip contact {} for {}. Client not synced'.format(wcontact.firstname, whmcs_client.firstname))
-            continue
-        contact, created = Contact.objects.update_or_create(client=fleio_client,
-                                                            email=wcontact.email,
-                                                            defaults={'first_name': wcontact.firstname,
-                                                                      'last_name': wcontact.lastname,
-                                                                      'company': wcontact.companyname,
-                                                                      'address1': wcontact.address1,
-                                                                      'address2': wcontact.address2,
-                                                                      'city': wcontact.city,
-                                                                      'country': wcontact.country,
-                                                                      'state': wcontact.state,
-                                                                      'zip_code': wcontact.postcode,
-                                                                      'phone': wcontact.phonenumber})
-        if not created:
-            LOG.info('Updated contact {} for {}'.format(contact.name, contact.client.name))
-        else:
-            LOG.info('Created contact {} for {}'.format(contact.name, contact.client.name))
+        with transaction.atomic():
+            try:
+                SyncedAccount.objects.get(whmcs_id=whmcs_client.id, whmcs_uuid=whmcs_client.uuid)
+            except SyncedAccount.DoesNotExist:
+                existing_client = Client.objects.filter(external_billing_id=whmcs_client.uuid).first()
+                if not existing_client:
+                    LOG.warning(
+                        'Skip contact {} for client {}. Client not synced'.format(wcontact.firstname, whmcs_client.id)
+                    )
+                    continue
 
-        if wcontact.subaccount:
-            # NOTE(tomo): Create a new user and associate it with the Client this contact belongs to
-            user, created = AppUser.objects.update_or_create(username=wcontact.email,
-                                                             email=wcontact.email,
-                                                             defaults={'first_name': wcontact.firstname,
-                                                                       'last_name': wcontact.lastname,
-                                                                       'password': wcontact.password,
-                                                                       'is_active': True})
+            created = False
+            contact = Contact.objects.filter(client=fleio_client, email=wcontact.email).first()
+            if not contact:
+                created = True
+                contact = Contact(
+                    client=fleio_client,
+                )
+
+            # process contact fields
+            sync_fields(fleio_record=contact, whmcs_record=wcontact, fields_to_sync=CONTACT_FIELDS_TO_SYNC)
+            contact.save()
+
             if created:
-                SyncedAccount.objects.create(whmcs_id=wcontact.id,
-                                             user=user,
-                                             client=fleio_client,
-                                             password_synced=False,
-                                             subaccount=True)
-                UserToClient.objects.create(user=user, client=fleio_client)
-                LOG.info('Created contact subaccount {} for {}'.format(user.email, fleio_client.long_name))
+                LOG.info('Created contact {} for {} ({})'.format(contact.name, contact.client.name, contact.client_id))
             else:
-                LOG.info('Updated contact subaccount {} for {}'.format(user.email, fleio_client.long_name))
-    return ''
+                LOG.info('Updated contact {} for {} ({})'.format(contact.name, contact.client.name, contact.client_id))
 
+            synced_contacts += 1
+    return synced_contacts
+
+
+def sync_contacts(fail_fast):
+    """Synchronizes all WHMCS contacts for existing clients."""
+    exception_list = []
+    client_list = []
+    for client in Client.objects.all():
+        synced_account = SyncedAccount.objects.filter(client=client, subaccount=False).first()
+        whmcs_client = Tblclients.objects.filter(
+            id=synced_account.whmcs_id, uuid=synced_account.whmcs_uuid
+        ).first() if synced_account else None
+        if not whmcs_client and client.external_billing_id:
+            whmcs_client = Tblclients.objects.filter(uuid=client.external_billing_id).first()
+
+        if whmcs_client:
+            try:
+                synced_contacts = sync_client_contacts(fleio_client=client, whmcs_client=whmcs_client)
+                client_list.append('Fleio client {} (ID: {}): Synced {} contact(s).'.format(client.name,
+                                                                                            client.id,
+                                                                                            synced_contacts))
+            except Exception as ex:
+                LOG.exception(ex)
+                if fail_fast:
+                    exception_list.append(ex)
+                    break
+                else:
+                    exception_list.append(ex)
+    return client_list, exception_list

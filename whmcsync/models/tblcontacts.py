@@ -14,6 +14,7 @@ class Tblcontacts(models.Model):
     postcode = models.TextField()
     country = models.TextField()
     phonenumber = models.TextField()
+    tax_id = models.CharField(max_length=128)
     subaccount = models.IntegerField()
     password = models.TextField()
     permissions = models.TextField()
