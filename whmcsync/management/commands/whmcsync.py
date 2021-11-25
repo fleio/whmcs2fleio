@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
 
+from whmcsync.whmcsync.sync.client_contacts import sync_contacts
 from whmcsync.whmcsync.sync.clients import sync_clients
 from whmcsync.whmcsync.operations import verify_settings
 from whmcsync.whmcsync.sync.client_groups import sync_client_groups
@@ -25,6 +26,11 @@ class Command(BaseCommand):
                             dest='allclients',
                             default=False,
                             help='Sync all clients from WHMCS')
+        parser.add_argument('--contacts',
+                            action='store_true',
+                            dest='contacts',
+                            default=False,
+                            help='Sync all contacts from WHMCS for synced Fleio clients')
         parser.add_argument('--active-only',
                             action='store_true',
                             dest='activeonly',
@@ -83,6 +89,13 @@ class Command(BaseCommand):
         self.stdout.write('\nNumber of synced currencies: %d \nNumber of currencies failed to sync: %s'
                           % (len(currencies_list), len(exception_list)))
 
+    def _sync_contacts(self, options):
+        client_contacts_list, exception_list = sync_contacts(fail_fast=options.get('failfast'))
+        if client_contacts_list:
+            self.stdout.write('\nSuccessfully synced WHMCS contacts for client(s):\n')
+            for client_contacts_display in client_contacts_list:
+                self.stdout.write(str(client_contacts_display), ending='\n')
+
     def _sync_clients(self, options, whmcs_ids=None):
         client_list, exception_list = sync_clients(
             fail_fast=options.get('failfast', False),
@@ -122,6 +135,9 @@ class Command(BaseCommand):
             self._sync_currencies(options=options)
             self._sync_client_groups(options=options)
             self._sync_clients(options=options, whmcs_ids=options.get('clients'))
+
+        if options.get('contacts'):
+            self._sync_contacts(options=options)
 
         if options.get('products'):
             failfast = options.get('failfast', False)
