@@ -8,6 +8,7 @@ from whmcsync.whmcsync.sync.client_groups import sync_client_groups
 from whmcsync.whmcsync.sync.currencies import sync_currencies
 from whmcsync.whmcsync.sync.product_groups import sync_product_groups
 from whmcsync.whmcsync.sync.products import sync_products
+from whmcsync.whmcsync.sync.servers import sync_server_groups
 from whmcsync.whmcsync.sync.servers import sync_servers
 from whmcsync.whmcsync.sync.services import sync_services
 from whmcsync.whmcsync.sync.tax_rules import sync_tax_rules
@@ -41,6 +42,16 @@ class Command(BaseCommand):
                             dest='clientgroups',
                             default=False,
                             help='Sync all client groups from WHMCS')
+        parser.add_argument('--server-groups',
+                            action='store_true',
+                            dest='servergroups',
+                            default=False,
+                            help='Sync all server groups from WHMCS')
+        parser.add_argument('--servers',
+                            action='store_true',
+                            dest='servers',
+                            default=False,
+                            help='Sync all servers and server groups from WHMCS')
         parser.add_argument('--products',
                             action='store_true',
                             dest='products',
@@ -88,6 +99,16 @@ class Command(BaseCommand):
         currencies_list, exception_list = sync_currencies(fail_fast=options.get('failfast'), default=False)
         self.stdout.write('\nNumber of synced currencies: %d \nNumber of currencies failed to sync: %s'
                           % (len(currencies_list), len(exception_list)))
+
+    def _sync_server_groups(self, options):
+        groups_list, exception_list = sync_server_groups(options=options)
+        self.stdout.write('\nNumber of synced server groups: %d \nNumber of server groups failed to sync: %s'
+                          % (len(groups_list), len(exception_list)))
+
+    def _sync_servers(self, options):
+        servers_list, exception_list = sync_servers(options=options)
+        self.stdout.write('\nNumber of synced servers: %d \nNumber of servers failed to sync: %s'
+                          % (len(servers_list), len(exception_list)))
 
     def _sync_contacts(self, options):
         client_contacts_list, exception_list = sync_contacts(fail_fast=options.get('failfast'))
@@ -139,9 +160,15 @@ class Command(BaseCommand):
         if options.get('contacts'):
             self._sync_contacts(options=options)
 
+        if options.get('servergroups'):
+            self._sync_server_groups(options)
+
+        if options.get('servers'):
+            self._sync_server_groups(options)
+            self._sync_servers(options)
+
         if options.get('products'):
             failfast = options.get('failfast', False)
-            sync_servers(options)
             group_list, exception_list = sync_product_groups(fail_fast=failfast)
             for gname in group_list:
                 self.stdout.write('Successfully synced WHMCS product group: {}'.format(gname))

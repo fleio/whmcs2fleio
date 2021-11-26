@@ -6,7 +6,7 @@ class Tblservers(models.Model):
     ipaddress = models.TextField()
     assignedips = models.TextField()
     hostname = models.TextField()
-    monthlycost = models.DecimalField(max_digits=10, decimal_places=2)
+    monthlycost = models.DecimalField(max_digits=16, decimal_places=2)
     noc = models.TextField()
     statusaddress = models.TextField()
     nameserver1 = models.TextField()
