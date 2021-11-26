@@ -66,3 +66,10 @@ After installing this app, do not forget to run **django migrate** to setup the 
 This database is used to allow authentication for users with their old password.
 
 To see import options, activate Fleio environment and run `django whmcsync -h`.
+
+
+### Known limitations
+
+#### Servers:
+
+- passwords are not synced, they have to be re-set

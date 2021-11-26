@@ -1,19 +1,37 @@
-import logging
-
+from django.db import transaction
 from django.utils.translation import ugettext_lazy as _
 
+from common.logger import get_fleio_logger
 from fleio.conf.utils import fernet_encrypt
 from fleio.core.models import Plugin
+from fleio.servers.models import HostingServerSettings
 from fleio.servers.models import Server
 from fleio.servers.models import ServerGroup
 from fleio.servers.models.server import ServerStatus
-from ..models import Tblservers
+from .utils import FieldToSync
+from .utils import sync_fields
 from ..models import Tblservergroups
 from ..models import Tblservergroupsrel
+from ..models import Tblservers
 
-LOG = logging.getLogger('whmcsync')
+LOG = get_fleio_logger('whmcsync')
 
 DEFAULT_UNKNOWN_GROUP = 'WHMCS Unknown'
+
+
+class HostingServerSettingField(FieldToSync):
+    record_name = 'Hosting server setting'
+
+
+SERVER_SETTINGS_FIELDS_TO_SYNC = [
+    HostingServerSettingField(fleio_key='hostname', whmcs_key='hostname', fleio_max_length=255),
+    HostingServerSettingField(fleio_key='username', whmcs_key='username', fleio_max_length=255),
+    HostingServerSettingField(fleio_key='status_url', whmcs_key='statusaddress', fleio_max_length=255),
+    HostingServerSettingField(fleio_key='api_token', whmcs_key='accesshash', fleio_max_length=4096, encrypt=True),
+    HostingServerSettingField(fleio_key='assigned_ips', whmcs_key='assignedips', fleio_max_length=4096),
+    HostingServerSettingField(fleio_key='port', whmcs_key='port', default=0),
+    HostingServerSettingField(fleio_key='max_accounts', whmcs_key='maxaccounts'),
+]
 
 
 def sync_server_groups(options):
@@ -39,24 +57,41 @@ def sync_server_groups(options):
 
 
 def sync_servers(options):
-    sync_server_groups(options)
+    fail_fast = options.get('failfast', False)
+    exception_list = []
+    name_list = []
     for whmcs_server in Tblservers.objects.all():
-        Server.objects.update_or_create(
-            name=whmcs_server.name,
-            group=get_fleio_server_group(whmcs_server=whmcs_server),
-            plugin=get_fleio_server_plugin(whmcs_server=whmcs_server),
-            defaults={'status': (ServerStatus.disabled if whmcs_server.disabled or
-                                 not whmcs_server.active else ServerStatus.enabled),
-                      'settings': get_fleio_server_settings(whmcs_server=whmcs_server)}
-        )
+        try:
+            with transaction.atomic():
+                server, created = Server.objects.update_or_create(
+                    name=whmcs_server.name,
+                    group=get_fleio_server_group(whmcs_server=whmcs_server),
+                    plugin=get_fleio_server_plugin(whmcs_server=whmcs_server),
+                    defaults={'status': (ServerStatus.disabled if whmcs_server.disabled or
+                                         not whmcs_server.active else ServerStatus.enabled),
+                              'settings': get_fleio_server_settings(whmcs_server=whmcs_server)}
+                )
+                settings, created = HostingServerSettings.objects.get_or_create(server=server)
+                settings.secure = True if whmcs_server.secure == 'on' else False
+                sync_fields(
+                    fleio_record=settings, whmcs_record=whmcs_server, fields_to_sync=SERVER_SETTINGS_FIELDS_TO_SYNC
+                )
+                settings.save()
+                name_list.append(server.name)
+        except Exception as e:
+            LOG.exception(e)
+            exception_list.append(e)
+            if fail_fast:
+                break
+    return name_list, exception_list
 
 
 def get_fleio_server_group(whmcs_server: Tblservers):
     """We only support one server in one group for now"""
     group_rel = Tblservergroupsrel.objects.filter(serverid=whmcs_server.id).first()
     if not group_rel:
-        unknown_gr, created = ServerGroup.objects.update_or_create(name=DEFAULT_UNKNOWN_GROUP,
-                                                                   description='Servers with WHMCS deleted groups')
+        unknown_gr, created = ServerGroup.objects.get_or_create(name=DEFAULT_UNKNOWN_GROUP,
+                                                                description='Servers with WHMCS deleted groups')
         return unknown_gr
     whmcs_group = Tblservergroups.objects.get(id=group_rel.groupid)
     return ServerGroup.objects.get(name=whmcs_group.name)
@@ -66,9 +101,11 @@ def get_fleio_server_plugin(whmcs_server: Tblservers):
     whmcs_server_type = whmcs_server.type
     if whmcs_server_type == 'cpanel':
         return Plugin.objects.filter(app_label='cpanelserver').first()
-    elif whmcs_server_type == 'hypanel':
-        return Plugin.objects.filter(app_label='hypanel').first()
     else:
+        LOG.warning(
+            'Fallback to Fleio TODO plugin (if exists) for server {} with server type {}'.format(whmcs_server.name,
+                                                                                                 whmcs_server_type)
+        )
         return Plugin.objects.filter(app_label='todo').first()
 
 
