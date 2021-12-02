@@ -97,6 +97,16 @@ def get_fleio_server_group(whmcs_server: Tblservers):
     return ServerGroup.objects.get(name=whmcs_group.name)
 
 
+def get_fleio_server_group_by_whmcs_id(server_group_id):
+    try:
+        whmcs_group = Tblservergroups.objects.get(id=server_group_id)
+        return ServerGroup.objects.get(name=whmcs_group.name)
+    except Tblservergroups.DoesNotExist:
+        fleio_group, created = ServerGroup.objects.get_or_create(name=DEFAULT_UNKNOWN_GROUP,
+                                                                 description='Servers with WHMCS deleted groups')
+        return fleio_group
+
+
 def get_fleio_server_plugin(whmcs_server: Tblservers):
     whmcs_server_type = whmcs_server.type
     if whmcs_server_type == 'cpanel':

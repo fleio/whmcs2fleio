@@ -3,6 +3,7 @@ from django.db import models
 
 class Tblproductgroups(models.Model):
     name = models.TextField()
+    slug = models.CharField(max_length=128)
     headline = models.TextField(blank=True, null=True)
     tagline = models.TextField(blank=True, null=True)
     orderfrmtpl = models.TextField()

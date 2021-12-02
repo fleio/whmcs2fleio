@@ -14,8 +14,8 @@ def get_whmcs_price(price):
         return decimal.Decimal(price)
 
 
-def get_whmcs_currency(currency_id):
-    whmcs_currency = Tblcurrencies.objects.get(id=currency_id)
+def get_fleio_currency(whmcs_currency_id):
+    whmcs_currency = Tblcurrencies.objects.get(id=whmcs_currency_id)
     return Currency.objects.get(code=whmcs_currency.code)
 
 
@@ -28,7 +28,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
         if whmcs_product.paytype == 'ontime':
             fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.onetime,
                                                   cycle_multiplier=1,
-                                                  currency=get_whmcs_currency(whmcs_price.currency),
+                                                  currency=get_fleio_currency(whmcs_price.currency),
                                                   defaults={
                                                       'setup_fee': get_whmcs_price(whmcs_price.msetupfee),
                                                       'fixed_price': get_whmcs_price(whmcs_price.monthly),
@@ -39,7 +39,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
             if whmcs_price.monthly >= zero:
                 fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.month,
                                                       cycle_multiplier=1,
-                                                      currency=get_whmcs_currency(whmcs_price.currency),
+                                                      currency=get_fleio_currency(whmcs_price.currency),
                                                       defaults={
                                                           'setup_fee': get_whmcs_price(whmcs_price.msetupfee),
                                                           'fixed_price': get_whmcs_price(whmcs_price.monthly),
@@ -48,7 +48,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
             if whmcs_price.quarterly >= zero:
                 fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.month,
                                                       cycle_multiplier=3,
-                                                      currency=get_whmcs_currency(whmcs_price.currency),
+                                                      currency=get_fleio_currency(whmcs_price.currency),
                                                       defaults={
                                                           'setup_fee': get_whmcs_price(whmcs_price.qsetupfee),
                                                           'fixed_price': get_whmcs_price(whmcs_price.quarterly),
@@ -57,7 +57,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
             if whmcs_price.semiannually >= zero:
                 fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.month,
                                                       cycle_multiplier=6,
-                                                      currency=get_whmcs_currency(whmcs_price.currency),
+                                                      currency=get_fleio_currency(whmcs_price.currency),
                                                       defaults={
                                                           'setup_fee': get_whmcs_price(whmcs_price.ssetupfee),
                                                           'fixed_price': get_whmcs_price(whmcs_price.semiannually),
@@ -66,7 +66,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
             if whmcs_price.annually >= zero:
                 fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.year,
                                                       cycle_multiplier=1,
-                                                      currency=get_whmcs_currency(whmcs_price.currency),
+                                                      currency=get_fleio_currency(whmcs_price.currency),
                                                       defaults={
                                                           'setup_fee': get_whmcs_price(whmcs_price.asetupfee),
                                                           'fixed_price': get_whmcs_price(whmcs_price.annually),
@@ -76,7 +76,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
             if whmcs_price.biennially >= zero:
                 fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.year,
                                                       cycle_multiplier=2,
-                                                      currency=get_whmcs_currency(whmcs_price.currency),
+                                                      currency=get_fleio_currency(whmcs_price.currency),
                                                       defaults={
                                                           'setup_fee': get_whmcs_price(whmcs_price.bsetupfee),
                                                           'fixed_price': get_whmcs_price(whmcs_price.biennially),
@@ -86,7 +86,7 @@ def sync_product_cycles(fleio_product, whmcs_product):
             if whmcs_price.triennially >= zero:
                 fleio_product.cycles.update_or_create(cycle=ProductCyclePeriods.year,
                                                       cycle_multiplier=3,
-                                                      currency=get_whmcs_currency(whmcs_price.currency),
+                                                      currency=get_fleio_currency(whmcs_price.currency),
                                                       defaults={
                                                           'setup_fee': get_whmcs_price(whmcs_price.tsetupfee),
                                                           'fixed_price': get_whmcs_price(whmcs_price.triennially),
