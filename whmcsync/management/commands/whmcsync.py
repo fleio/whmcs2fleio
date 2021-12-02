@@ -52,6 +52,11 @@ class Command(BaseCommand):
                             dest='servers',
                             default=False,
                             help='Sync all servers and server groups from WHMCS')
+        parser.add_argument('--product-groups',
+                            action='store_true',
+                            dest='productgroups',
+                            default=False,
+                            help='Sync all product groups from WHMCS')
         parser.add_argument('--products',
                             action='store_true',
                             dest='products',
@@ -110,6 +115,16 @@ class Command(BaseCommand):
         self.stdout.write('\nNumber of synced servers: %d \nNumber of servers failed to sync: %s'
                           % (len(servers_list), len(exception_list)))
 
+    def _sync_product_groups(self, options):
+        product_groups_list, exception_list = sync_product_groups(fail_fast=options.get('failfast', False))
+        self.stdout.write('\nNumber of synced product groups: %d \nNumber of product groups failed to sync: %s'
+                          % (len(product_groups_list), len(exception_list)))
+
+    def _sync_products(self, options):
+        products_list, exception_list = sync_products(fail_fast=options.get('failfast', False))
+        self.stdout.write('\nNumber of synced products: %d \nNumber of products failed to sync: %s'
+                          % (len(products_list), len(exception_list)))
+
     def _sync_contacts(self, options):
         client_contacts_list, exception_list = sync_contacts(fail_fast=options.get('failfast'))
         if client_contacts_list:
@@ -167,22 +182,15 @@ class Command(BaseCommand):
             self._sync_server_groups(options)
             self._sync_servers(options)
 
+        if options.get('productgroups'):
+            self._sync_product_groups(options=options)
+
         if options.get('products'):
-            failfast = options.get('failfast', False)
-            group_list, exception_list = sync_product_groups(fail_fast=failfast)
-            for gname in group_list:
-                self.stdout.write('Successfully synced WHMCS product group: {}'.format(gname))
-            if len(exception_list):
-                self.stdout.write('The following exceptions occured: \n')
-            for exe in exception_list:
-                self.stdout.write(str(exe))
-            prod_list, exception_list = sync_products(fail_fast=failfast)
-            for prod in prod_list:
-                self.stdout.write('Product synced: {}'.format(prod))
-            if len(exception_list):
-                self.stdout.write('The following product sync exceptions occured: \n')
-                for exe in exception_list:
-                    self.stdout.write(str(exe))
+            self._sync_product_groups(options=options)
+            self._sync_server_groups(options=options)  # sync server groups for module settings (e.g. cpanel server)
+            self._sync_currencies(options=options)
+            self._sync_products(options=options)
+
         if options.get('services'):
             service_list, exception_list = sync_services(fail_fast=options.get('failfast', False))
             if exception_list and len(exception_list):
