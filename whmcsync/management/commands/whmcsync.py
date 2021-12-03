@@ -115,6 +115,11 @@ class Command(BaseCommand):
         self.stdout.write('\nNumber of synced servers: %d \nNumber of servers failed to sync: %s'
                           % (len(servers_list), len(exception_list)))
 
+    def _sync_services(self, options):
+        services_list, exception_list = sync_services(fail_fast=options.get('failfast', False))
+        self.stdout.write('\nNumber of synced services: %d \nNumber of services failed to sync: %s'
+                          % (len(services_list), len(exception_list)))
+
     def _sync_product_groups(self, options):
         product_groups_list, exception_list = sync_product_groups(fail_fast=options.get('failfast', False))
         self.stdout.write('\nNumber of synced product groups: %d \nNumber of product groups failed to sync: %s'
@@ -192,7 +197,5 @@ class Command(BaseCommand):
             self._sync_products(options=options)
 
         if options.get('services'):
-            service_list, exception_list = sync_services(fail_fast=options.get('failfast', False))
-            if exception_list and len(exception_list):
-                for exe in exception_list:
-                    self.stdout.write(str(exe))
+            # if trying to sync service without related client/product already synced, it will be skipped with a warning
+            self._sync_services(options=options)

@@ -1,158 +1,54 @@
 import decimal
 import ipaddress
-import logging
 
-from datetime import datetime
-from django.utils import timezone
+from django.db import transaction
 from django.utils.timezone import now as utcnow
 
+from common.logger import get_fleio_logger
 from fleio.billing.models import CancellationRequest
 from fleio.billing.models import Product
+from fleio.billing.models import ProductModule
 from fleio.billing.models import Service
 from fleio.billing.models import ServiceHostingAccount
 from fleio.billing.models.calcelation_request import CancellationTypes
 from fleio.billing.models.product_cycle_periods import ProductCyclePeriods
+from fleio.billing.service_cycle_manager import ServiceCycleManager
 from fleio.billing.settings import ServiceStatus
 from fleio.billing.settings import ServiceSuspendType
+from fleio.core.models import Client
 from fleio.core.models import Currency
 from fleio.servers.models import Server
+from whmcsync.whmcsync.exceptions import DBSyncException
 from whmcsync.whmcsync.models import SyncedAccount
 from whmcsync.whmcsync.models import Tblcancelrequests
+from whmcsync.whmcsync.models import Tblclients
 from whmcsync.whmcsync.models import Tblhosting
 from whmcsync.whmcsync.models import Tblproducts
+from whmcsync.whmcsync.sync.utils import date_to_datetime
 
-LOG = logging.getLogger('whmcsync')
-DEFAULT_OPENSTACK = 'default_openstack'
-
-
-def sync_services(fail_fast):
-    exception_list = []
-    service_list = []
-    # NOTE: filter all products except for fleio products, for cases when the WHMCS module was used
-    for whmcs_service in Tblhosting.objects.exclude(packageid__lte=0):
-        synced_account = whmcs_service_to_synced_account(whmcs_service)
-        fleio_product = whmcs_service_to_fleio_product(whmcs_service)
-        if fleio_product.code == DEFAULT_OPENSTACK:
-            # NOTE(tomo): Project should already exist
-            continue
-        client = synced_account.client
-        currency = client.currency
-        service_cycle = get_whmcs_service_cycle(whmcs_service=whmcs_service, currency=currency)
-        internal_id = get_whmcs_service_internal_id(whmcs_service=whmcs_service)
-        try:
-            service_status = whmcs_service_status(whmcs_service)
-            service_defaults = {'display_name': fleio_product.name,
-                                'status': service_status,
-                                'notes': whmcs_service.notes[:4096],
-                                'created_at': date_to_datetime(whmcs_service.regdate)}
-            if whmcs_service.billingcycle.lower() == 'free account' or whmcs_service.amount < decimal.Decimal('0.00'):
-                # WHMCS services with Free cycles and/or negative amount should have an overriden price set to 0
-                # since we don't have an other equivalent in Fleio
-                service_defaults['override_price'] = decimal.Decimal('0.00')
-            if whmcs_service.nextduedate:
-                service_defaults['next_due_date'] = date_to_datetime(whmcs_service.nextduedate)
-            if whmcs_service.nextinvoicedate:
-                service_defaults['next_invoice_date'] = date_to_datetime(whmcs_service.nextinvoicedate)
-            if whmcs_service.overidesuspenduntil:
-                overide_datetime = date_to_datetime(whmcs_service.overidesuspenduntil)
-                if overide_datetime > utcnow():
-                    service_defaults['override_suspend_until'] = overide_datetime
-            if whmcs_service.suspendreason:
-                service_defaults['suspend_reason'] = whmcs_service.suspendreason
-            if service_status == ServiceStatus.suspended:
-                if whmcs_service.suspendreason and whmcs_service.suspendreason.lower() == 'overdue on payment':
-                    service_defaults['suspend_type'] = ServiceSuspendType.overdue
-                else:
-                    service_defaults['suspend_type'] = ServiceSuspendType.staff
-            if whmcs_service.termination_date:
-                service_defaults['terminated_at'] = date_to_datetime(whmcs_service.termination_date)
-
-            service, created = Service.objects.update_or_create(client=client,
-                                                                product=fleio_product,
-                                                                cycle=service_cycle,
-                                                                internal_id=internal_id,
-                                                                defaults=service_defaults)
-            if created:
-                sync_cancellation_request_if_exists(whmcs_service=whmcs_service, fleio_service=service)
-
-            # Sync server hosting account (domain and server)
-            # The cPanel package name is taken from configoption1
-            fleio_service_server = get_fleio_server_by_whmcs_id(whmcs_service.server)
-            whmcs_product = Tblproducts.objects.get(pk=whmcs_service.packageid)
-            if whmcs_service.dedicatedip:
-                try:
-                    ipaddress.ip_address(whmcs_service.dedicatedip.strip())
-                    dedicated_ip = whmcs_service.dedicatedip.strip()
-                except ValueError as e:
-                    exception_list.append(e)
-                    LOG.error('Unable to sync service {} IP: {}: Not a valid IP'.format(whmcs_service.domain,
-                                                                                        whmcs_service.dedicatedip))
-                    dedicated_ip = None
-            else:
-                dedicated_ip = None
-            if whmcs_service.domain and whmcs_service.domain.strip():
-                # Only create hosting accounts if domains are required for services
-                # Otherwise come up with a way to determine the account_id for different WHMCS services
-                ServiceHostingAccount.objects.update_or_create(server=fleio_service_server,
-                                                               account_id=whmcs_service.domain,
-                                                               service=service,
-                                                               defaults={'username': whmcs_service.username,
-                                                                         'password': whmcs_service.password,
-                                                                         'dedicated_ip': dedicated_ip,
-                                                                         'package_name': whmcs_product.configoption1})
-
-        except Exception as e:
-            exception_list.append(e)
-            if fail_fast:
-                break
-
-    num_excluded = Tblhosting.objects.filter(packageid__lte=0).count()
-    if num_excluded:
-        LOG.warning('The following services without a product associated were excluded:')
-        for excluded_service in Tblhosting.objects.filter(packageid__lte=0):
-            LOG.warning('ID: {} Domain: "{}" Billing cycle: {}'.format(excluded_service.id,
-                                                                       excluded_service.domain,
-                                                                       excluded_service.billingcycle))
-    return service_list, exception_list
+LOG = get_fleio_logger('whmcsync')
+OPENSTACK_APP_LABEL = 'openstack'
 
 
-def get_whmcs_service_internal_id(whmcs_service: Tblhosting):
-    return 'whmcs_{}_{}'.format(whmcs_service.id, whmcs_service.userid)
-
-
-def whmcs_service_status(whmcs_service: Tblhosting):
-    """Match the WHMCS service status to the Fleio service status"""
-    if whmcs_service.domainstatus.lower() == 'active':
-        return ServiceStatus.active
-    elif whmcs_service.domainstatus.lower() == 'cancelled':
-        return ServiceStatus.canceled
-    elif whmcs_service.domainstatus.lower() == 'pending':
-        return ServiceStatus.pending
-    elif whmcs_service.domainstatus.lower() == 'fraud':
-        return ServiceStatus.fraud
-    elif whmcs_service.domainstatus.lower() == 'terminated':
-        return ServiceStatus.terminated
-    elif whmcs_service.domainstatus.lower() == 'completed':
-        return ServiceStatus.archived
-    else:
-        return ServiceStatus.archived
-
-
-def whmcs_service_to_synced_account(whmcs_service: Tblhosting):
-    synced_account = SyncedAccount.objects.get(whmcs_id=whmcs_service.userid, subaccount=False)
-    return synced_account
+def whmcs_service_to_client(whmcs_service: Tblhosting):
+    synced_account = SyncedAccount.objects.filter(whmcs_id=whmcs_service.userid, subaccount=False).first()
+    whmcs_client = Tblclients.objects.get(id=whmcs_service.userid)
+    return synced_account.client if synced_account else Client.objects.filter(
+        external_billing_id=whmcs_client.uuid
+    ).first()
 
 
 def whmcs_service_to_fleio_product(whmcs_service: Tblhosting):
     whmcs_product = Tblproducts.objects.get(pk=whmcs_service.packageid)
     if whmcs_product.servertype == 'fleio':
-        return Product.objects.get(code=DEFAULT_OPENSTACK)
-    return Product.objects.get(code='{}_{}_{}'.format('whmcs', whmcs_product.id, whmcs_product.gid))
+        openstack_module = ProductModule.objects.get(plugin__app_label=OPENSTACK_APP_LABEL)
+        return Product.objects.filter(module=openstack_module).first()
+    # retrieve synced product
+    return Product.objects.filter(code='{}_{}_{}'.format('whmcs', whmcs_product.id, whmcs_product.gid)).first()
 
 
-def get_whmcs_service_cycle(whmcs_service: Tblhosting, currency: Currency) -> (str, int):
+def get_fleio_product_cycle(whmcs_service: Tblhosting, currency: Currency) -> (str, int):
     fleio_product = whmcs_service_to_fleio_product(whmcs_service)
-    LOG.debug('Syncing service: {}'.format(whmcs_service.domain or fleio_product.name))
     cycle = None
     multiplier = None
     if whmcs_service.billingcycle.lower() == 'free account' or whmcs_service.amount < 0:
@@ -171,31 +67,57 @@ def get_whmcs_service_cycle(whmcs_service: Tblhosting, currency: Currency) -> (s
         cycle, multiplier = ProductCyclePeriods.year, 2
     elif whmcs_service.billingcycle.lower() == 'triennially':
         cycle, multiplier = ProductCyclePeriods.year, 3
-    ret_cycle = fleio_product.cycles.get(cycle=cycle, cycle_multiplier=multiplier, currency=currency)
-    return ret_cycle
+    cycle = fleio_product.cycles.get(cycle=cycle, cycle_multiplier=multiplier, currency=currency)
+    return cycle
+
+
+def get_fleio_service_status(whmcs_service: Tblhosting):
+    """Match the WHMCS service status to the Fleio service status"""
+    if whmcs_service.domainstatus.lower() == 'active':
+        return ServiceStatus.active
+    elif whmcs_service.domainstatus.lower() == 'suspended':
+        return ServiceStatus.suspended
+    elif whmcs_service.domainstatus.lower() == 'cancelled':
+        return ServiceStatus.canceled
+    elif whmcs_service.domainstatus.lower() == 'pending':
+        return ServiceStatus.pending
+    elif whmcs_service.domainstatus.lower() == 'fraud':
+        return ServiceStatus.fraud
+    elif whmcs_service.domainstatus.lower() == 'terminated':
+        return ServiceStatus.terminated
+    elif whmcs_service.domainstatus.lower() == 'completed':
+        return ServiceStatus.archived
+    else:
+        return ServiceStatus.archived
+
+
+def get_whmcs_service_internal_id(whmcs_service: Tblhosting):
+    return 'whmcs_{}_{}'.format(whmcs_service.id, whmcs_service.userid)
+
+
+def get_fleio_service_suspend_type(whmcs_service: Tblhosting, service_status):
+    if service_status == ServiceStatus.suspended:
+        if whmcs_service.suspendreason and whmcs_service.suspendreason.lower() == 'overdue on payment':
+            return ServiceSuspendType.overdue
+        return ServiceSuspendType.staff
+    return None
 
 
 def sync_cancellation_request_if_exists(whmcs_service: Tblhosting, fleio_service: Service):
-    c_req = None
     # NOTE(tomo): Get only the last cancellation request if exists
     cancellation_request = Tblcancelrequests.objects.filter(relid=whmcs_service.id).order_by('date').last()
-    if not cancellation_request:
-        return c_req
-    else:
+    if cancellation_request:
         if not fleio_service.cancellation_request:
             cancellation_type = (CancellationTypes.IMMEDIATE if cancellation_request.type == 'Immediate' else
                                  CancellationTypes.END_OF_CYCLE)
-            if whmcs_service.termination_date:
-                req_completed_at = date_to_datetime(whmcs_service.termination_date)
-            else:
-                req_completed_at = None
-            c_req = CancellationRequest.objects.create(user=fleio_service.client.users.first(),
-                                                       created_at=cancellation_request.date,
-                                                       completed_at=req_completed_at,
-                                                       reason=cancellation_request.reason,
-                                                       cancellation_type=cancellation_type)
-            fleio_service.cancellation_request = c_req
-    return c_req
+            fleio_service.cancellation_request = CancellationRequest.objects.create(
+                user=fleio_service.client.users.first(),
+                created_at=cancellation_request.date,
+                completed_at=date_to_datetime(whmcs_service.termination_date),
+                reason=cancellation_request.reason[:2048],
+                cancellation_type=cancellation_type
+            )
+            cancellation_request.save(update_fields=['cancellation_request'])
 
 
 def get_fleio_server_by_whmcs_id(whmcs_server_id):
@@ -204,10 +126,114 @@ def get_fleio_server_by_whmcs_id(whmcs_server_id):
             return server
 
 
-def set_tz(date_time, tz=timezone.utc):
-    return timezone.make_aware(date_time, timezone=tz)
+def sync_service_hosting_account(whmcs_service: Tblhosting, fleio_service: Service):
+    # Sync server hosting account (domain and server)
+    # The cPanel package name is taken from configoption1
+    if not whmcs_service.server:
+        return
+    fleio_service_server = get_fleio_server_by_whmcs_id(whmcs_service.server)
+    if not fleio_service_server:
+        raise DBSyncException(
+            'Cannot sync WHMCS service {} hosting account because related server {} was not found in fleio.'.format(
+                whmcs_service.id, whmcs_service.server
+            )
+        )
+    whmcs_product = Tblproducts.objects.get(pk=whmcs_service.packageid)
+    if whmcs_service.dedicatedip:
+        try:
+            ipaddress.ip_address(whmcs_service.dedicatedip.strip())
+            dedicated_ip = whmcs_service.dedicatedip.strip()
+        except ValueError:
+            LOG.error('Unable to sync service {} IP: {}: Not a valid IP'.format(whmcs_service.domain,
+                                                                                whmcs_service.dedicatedip))
+            dedicated_ip = None
+    else:
+        dedicated_ip = None
+    if whmcs_service.domain and whmcs_service.domain.strip():
+        # Only create hosting accounts if domains are required for services
+        # Otherwise come up with a way to determine the account_id for different WHMCS services
+        ServiceHostingAccount.objects.update_or_create(server=fleio_service_server,
+                                                       account_id=whmcs_service.domain,
+                                                       service=fleio_service,
+                                                       defaults={'username': whmcs_service.username,
+                                                                 'password': whmcs_service.password,
+                                                                 'dedicated_ip': dedicated_ip,
+                                                                 'package_name': whmcs_product.configoption1})
 
 
-def date_to_datetime(date):
-    dt = datetime.combine(date, datetime.min.time())
-    return set_tz(dt, tz=timezone.utc)
+def sync_services(fail_fast):
+    exception_list = []
+    service_list = []
+    # NOTE: filter all products except for fleio products, for cases when the WHMCS module was used
+    for whmcs_service in Tblhosting.objects.exclude(packageid__lte=0):
+
+        fleio_product = whmcs_service_to_fleio_product(whmcs_service=whmcs_service)
+        if not fleio_product:
+            LOG.warning('Cannot sync whmcs service {} as Fleio related product is not synced'.format(whmcs_service.id))
+            continue
+        if fleio_product.module.plugin_label == OPENSTACK_APP_LABEL:
+            LOG.debug(
+                'Skipping syncing for service {} as it\'s related to a Fleio OpenStack product'.format(whmcs_service.id)
+            )
+            continue
+
+        client = whmcs_service_to_client(whmcs_service=whmcs_service)
+        if not client:
+            LOG.warning(
+                'Cannot sync whmcs service {} ({}) as Fleio related client (whmcs id: {}) is not synced'.format(
+                    whmcs_service.id, whmcs_service.domain, whmcs_service.userid
+                )
+            )
+            continue
+
+        LOG.debug('Syncing service: {}'.format(whmcs_service.domain or fleio_product.name))
+        try:
+            with transaction.atomic():
+                product_cycle = get_fleio_product_cycle(whmcs_service=whmcs_service, currency=client.currency)
+                internal_id = get_whmcs_service_internal_id(whmcs_service=whmcs_service)
+                service_status = get_fleio_service_status(whmcs_service)
+                override_suspend_until = date_to_datetime(whmcs_service.overidesuspenduntil)
+                service_defaults = {
+                    'display_name': fleio_product.name,
+                    'status': service_status,
+                    'notes': whmcs_service.notes[:4096],
+                    'created_at': date_to_datetime(whmcs_service.regdate),
+                    'terminated_at': date_to_datetime(whmcs_service.termination_date),
+                    'suspend_reason': whmcs_service.suspendreason,
+                    'override_suspend_until': override_suspend_until if (override_suspend_until and
+                                                                         override_suspend_until > utcnow()) else None,
+                    'is_free': (whmcs_service.billingcycle.lower() == 'free account' or
+                                whmcs_service.amount < decimal.Decimal('0.00')),
+                    'suspend_type': get_fleio_service_suspend_type(whmcs_service=whmcs_service,
+                                                                   service_status=service_status),
+                }
+
+                service, created = Service.objects.update_or_create(
+                    client=client,
+                    product=fleio_product,
+                    cycle=product_cycle,
+                    internal_id=internal_id,
+                    defaults=service_defaults,
+                )
+
+                if created:
+                    ServiceCycleManager.create_initial_cycle(service=service, start_date=whmcs_service.nextduedate)
+
+                sync_cancellation_request_if_exists(whmcs_service=whmcs_service, fleio_service=service)
+                sync_service_hosting_account(whmcs_service=whmcs_service, fleio_service=service)
+                service_list.append(service.display_name)
+
+        except Exception as e:
+            LOG.exception(e)
+            exception_list.append(e)
+            if fail_fast:
+                break
+
+    num_excluded = Tblhosting.objects.filter(packageid__lte=0).count()
+    if num_excluded:
+        LOG.warning('The following services without a product associated were excluded:')
+        for excluded_service in Tblhosting.objects.filter(packageid__lte=0):
+            LOG.warning('ID: {} Domain: "{}" Billing cycle: {}'.format(excluded_service.id,
+                                                                       excluded_service.domain,
+                                                                       excluded_service.billingcycle))
+    return service_list, exception_list

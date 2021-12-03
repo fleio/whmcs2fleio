@@ -4,6 +4,7 @@ from common.logger import get_fleio_logger
 from fleio.billing.models import Product
 from fleio.billing.models import ProductGroup
 from fleio.billing.models import ProductModule
+from fleio.billing.models.service_cycle_constants import ServiceCycleBillingTypes
 from fleio.billing.settings import PricingModel
 from fleio.billing.settings import ProductAutoSetup
 from fleio.billing.settings import ProductType
@@ -39,7 +40,8 @@ def sync_products(fail_fast):
                         'taxable': whmcs_product.tax,
                         'status': get_fleio_product_status(whmcs_product),
                         'auto_setup': get_fleio_product_auto_setup(whmcs_product=whmcs_product),
-                        'price_model': get_fleio_product_price_model(whmcs_product=whmcs_product)}
+                        'price_model': get_fleio_product_price_model(whmcs_product=whmcs_product),
+                        'billing_type': ServiceCycleBillingTypes.prepaid}
                 )
                 name_list.append(fleio_prod.name)
                 sync_cpanel_module_settings(fleio_product=fleio_prod, whmcs_product=whmcs_product)
