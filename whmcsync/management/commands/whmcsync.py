@@ -79,7 +79,7 @@ class Command(BaseCommand):
                             help=('Skip authentication backend settings check. '
                                   'The authentication backend module is used to allow WHMCS users to login with '
                                   'their old username and password'))
-        parser.add_argument('--taxes',
+        parser.add_argument('--tax-rules',
                             action='store_true',
                             dest='taxrules',
                             default=False,
@@ -130,6 +130,11 @@ class Command(BaseCommand):
         self.stdout.write('\nNumber of synced products: %d \nNumber of products failed to sync: %s'
                           % (len(products_list), len(exception_list)))
 
+    def _sync_tax_rules(self, options):
+        taxes_list, exception_list = sync_tax_rules(fail_fast=options.get('failfast', False))
+        self.stdout.write('\nNumber of synced tax rules: %d \nNumber of tax rules failed to sync: %s'
+                          % (len(taxes_list), len(exception_list)))
+
     def _sync_contacts(self, options):
         client_contacts_list, exception_list = sync_contacts(fail_fast=options.get('failfast'))
         if client_contacts_list:
@@ -158,8 +163,8 @@ class Command(BaseCommand):
         if options.get('all') and options.get('clients'):
             raise CommandError('Specify either "--all" or "--clients" not both')
 
-        if options.get('taxes'):
-            sync_tax_rules(fail_fast=options.get('failfast'))
+        if options.get('taxrules'):
+            self._sync_tax_rules(options=options)
 
         if options.get('currencies'):
             sync_currencies(fail_fast=options.get('failfast'), default=False)

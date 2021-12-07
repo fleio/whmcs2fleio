@@ -6,7 +6,7 @@ class Tbltax(models.Model):
     name = models.TextField()
     state = models.TextField()
     country = models.TextField()
-    taxrate = models.DecimalField(max_digits=10, decimal_places=2)
+    taxrate = models.DecimalField(max_digits=10, decimal_places=3)
 
     class Meta:
         managed = False

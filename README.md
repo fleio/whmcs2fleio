@@ -73,3 +73,7 @@ To see import options, activate Fleio environment and run `django whmcsync -h`.
 #### Servers:
 
 - passwords are not synced, they have to be re-set
+
+#### Tax rules:
+
+- tax rules that apply to all countries in WHMCS are not imported since Fleio does not support this
