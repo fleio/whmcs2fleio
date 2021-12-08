@@ -12,6 +12,8 @@ from whmcsync.whmcsync.sync.servers import sync_server_groups
 from whmcsync.whmcsync.sync.servers import sync_servers
 from whmcsync.whmcsync.sync.services import sync_services
 from whmcsync.whmcsync.sync.tax_rules import sync_tax_rules
+from whmcsync.whmcsync.sync.user_to_clients import sync_user_to_clients
+from whmcsync.whmcsync.sync.users import sync_users
 
 
 class Command(BaseCommand):
@@ -89,6 +91,11 @@ class Command(BaseCommand):
                             dest='currencies',
                             default=False,
                             help='Sync currencies with existing rates.')
+        parser.add_argument('--users',
+                            action='store_true',
+                            dest='users',
+                            default=False,
+                            help='Sync users.')
         parser.add_argument('--dry-run',
                             action='store_true',
                             dest='dryrun',
@@ -125,6 +132,14 @@ class Command(BaseCommand):
         self.stdout.write('\nNumber of synced product groups: %d \nNumber of product groups failed to sync: %s'
                           % (len(product_groups_list), len(exception_list)))
 
+    def _sync_users(self, fail_fast=False, related_to_clients=None):
+        users_list, exception_list = sync_users(
+            fail_fast=fail_fast,
+            related_to_clients=related_to_clients,
+        )
+        self.stdout.write('\nNumber of synced users: %d \nNumber of users failed to sync: %s'
+                          % (len(users_list), len(exception_list)))
+
     def _sync_products(self, options):
         products_list, exception_list = sync_products(fail_fast=options.get('failfast', False))
         self.stdout.write('\nNumber of synced products: %d \nNumber of products failed to sync: %s'
@@ -160,6 +175,8 @@ class Command(BaseCommand):
 
         verify_settings(ignore_auth_backend=options.get('ignoreauthbackend'))
 
+        fail_fast = options.get('fail_fast')
+
         if options.get('all') and options.get('clients'):
             raise CommandError('Specify either "--all" or "--clients" not both')
 
@@ -167,7 +184,10 @@ class Command(BaseCommand):
             self._sync_tax_rules(options=options)
 
         if options.get('currencies'):
-            sync_currencies(fail_fast=options.get('failfast'), default=False)
+            sync_currencies(fail_fast=fail_fast, default=False)
+
+        if options.get('users'):
+            self._sync_users(fail_fast=fail_fast)
 
         if options.get('clientgroups'):
             self._sync_client_groups(options=options)
@@ -175,12 +195,17 @@ class Command(BaseCommand):
         if options.get('allclients') or options.get('activeonly'):
             self._sync_currencies(options=options)
             self._sync_client_groups(options=options)
+            self._sync_users(fail_fast=fail_fast)
             self._sync_clients(options=options)
+            sync_user_to_clients(fail_fast=fail_fast)
 
-        if options.get('clients'):
+        clients = options.get('clients')
+        if clients:
             self._sync_currencies(options=options)
             self._sync_client_groups(options=options)
-            self._sync_clients(options=options, whmcs_ids=options.get('clients'))
+            self._sync_users(fail_fast=fail_fast, related_to_clients=clients)  # will sync only for given clients
+            self._sync_clients(options=options, whmcs_ids=clients)
+            sync_user_to_clients(fail_fast=fail_fast, related_to_clients=clients)
 
         if options.get('contacts'):
             self._sync_contacts(options=options)

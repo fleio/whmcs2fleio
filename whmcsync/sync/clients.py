@@ -1,15 +1,12 @@
 import decimal
-import logging
 from datetime import datetime
 
-from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
+from common.logger import get_fleio_logger
 from fleio.core.models import Client
 from fleio.core.models import ClientStatus
-from fleio.core.models import Role
-from fleio.core.models import UserToClient
 from whmcsync.whmcsync.exceptions import DBSyncException
 from whmcsync.whmcsync.models import SyncedAccount
 from whmcsync.whmcsync.models import Tblclients
@@ -20,16 +17,11 @@ from whmcsync.whmcsync.sync.client_contacts import sync_client_contacts
 from whmcsync.whmcsync.sync.utils import FieldToSync
 from whmcsync.whmcsync.sync.utils import sync_fields
 
-LOG = logging.getLogger('whmcsync')
-User = get_user_model()
+LOG = get_fleio_logger('whmcsync')
 
 
 class ClientField(FieldToSync):
     record_name = 'Client'
-
-
-class UserField(FieldToSync):
-    record_name = 'User'
 
 
 CLIENT_FIELDS_TO_SYNC = [
@@ -50,65 +42,30 @@ CLIENT_FIELDS_TO_SYNC = [
 
 
 def sync_client(id, whmcs_client=None):
-    """Synchronizes WHMCS clients and users."""
-    create = False
+    """Synchronizes WHMCS clients."""
+    add_partially_synced_account = False
     if whmcs_client is None:
         try:
             whmcs_client = Tblclients.objects.get(id=id)
         except (Tblclients.DoesNotExist, ValueError):
             raise DBSyncException('WHMCS client ID %s is not valid.' % id)
 
-    try:
-        # check if client already exists from a previous import
-        synced_client = SyncedAccount.objects.get(whmcs_id=whmcs_client.pk,
-                                                  whmcs_uuid=whmcs_client.uuid,
-                                                  subaccount=False)
-        client = synced_client.client
-        user = synced_client.user
-    except SyncedAccount.DoesNotExist:
+    # check if client already exists from a previous import
+    synced_account = SyncedAccount.objects.filter(
+        whmcs_id=whmcs_client.pk,
+        whmcs_uuid=whmcs_client.uuid,
+        subaccount=False
+    ).first()
+    if synced_account:
+        client = synced_account.client
+    else:
+        add_partially_synced_account = True  # we shall add a synced account without user for later use
         # check if client already exists because of using fleio-whmcs module
         # and not because of using a previous import
-        existing_client = Client.objects.filter(external_billing_id=whmcs_client.uuid).first()
-        if existing_client:
-            client = existing_client
-            # find related user
-            owner_role = Role.objects.get_owner_role()
-            if owner_role:
-                user_to_client = UserToClient.objects.filter(client=client, roles=owner_role).first()
-                if not user_to_client and UserToClient.objects.filter(client=client).exists():
-                    raise DBSyncException(
-                        'Cannot update client with external billing id {} from Fleio. '
-                        'Owner role exists in fleio but client has no owner. '
-                        'Set his owner then re-run operation.'.format(whmcs_client.uuid)
-                    )
-            else:
-                user_to_client = UserToClient.objects.filter(client=client).first()
-            if not user_to_client:
-                create = True
-                user = User()
-            else:
-                user = user_to_client.user
-        else:
-            try:
-                User.objects.get(email=whmcs_client.email)
-                raise DBSyncException('User %s already exists in Fleio database.' % whmcs_client.email)
-            except User.DoesNotExist:
-                create = True
-                user = User()
-                client = Client()
+        client = Client.objects.filter(external_billing_id=whmcs_client.uuid).first()
 
-    user_fields_to_sync = []
-    if create:
-        # don't change these fields if we only update the user
-        user_fields_to_sync.append(UserField(fleio_key='email', whmcs_key='email', fleio_max_length=254))
-        user_fields_to_sync.append(UserField(fleio_key='username', whmcs_key='email', fleio_max_length=150))
-        user_fields_to_sync.append(UserField(fleio_key='password', whmcs_key='password'))
-    user_fields_to_sync.append(UserField(fleio_key='first_name', whmcs_key='firstname', fleio_max_length=150))
-    user_fields_to_sync.append(UserField(fleio_key='last_name', whmcs_key='lastname', fleio_max_length=150))
-    user_fields_to_sync.append(UserField(fleio_key='last_login', whmcs_key='lastlogin'))
-    user.is_active = 'Active' in whmcs_client.status
-    # process user fields
-    sync_fields(fleio_record=user, whmcs_record=whmcs_client, fields_to_sync=user_fields_to_sync)
+    if not client:
+        client = Client()
 
     # process client fields
     sync_fields(fleio_record=client, whmcs_record=whmcs_client, fields_to_sync=CLIENT_FIELDS_TO_SYNC)
@@ -125,31 +82,25 @@ def sync_client(id, whmcs_client=None):
     client.uptodate_credit = decimal.Decimal('0.00')
 
     if whmcs_client.created_at:
-        user.date_joined = whmcs_client.created_at
         client.date_created = whmcs_client.created_at
     elif whmcs_client.datecreated:
         whmcs_date_created = datetime.combine(whmcs_client.datecreated, datetime.min.time())
         whmcs_date_created = timezone.make_aware(whmcs_date_created, timezone=timezone.utc)
-        user.date_joined = whmcs_date_created
         client.date_created = whmcs_date_created
 
     with transaction.atomic():
-        user.save()
         client.save()
         sync_client_credit(fleio_client=client, amount=whmcs_client.credit, currency_code=whmcs_client.currency.code)
 
-        if create:
-            usertoclient = UserToClient()
-            usertoclient.user = user
-            usertoclient.client = client
-            # owner role should be automatically added
-            usertoclient.save()
-            synced_client = SyncedAccount()
-            synced_client.whmcs_id = whmcs_client.id
-            synced_client.whmcs_uuid = whmcs_client.uuid
-            synced_client.client = client
-            synced_client.user = user
-            synced_client.save()
+        if add_partially_synced_account:
+            # add new synced account without user (will be populated later)
+            SyncedAccount.objects.create(
+                whmcs_id=whmcs_client.id,
+                whmcs_uuid=whmcs_client.uuid,
+                client=client,
+                user=None,
+                subaccount=False
+            )
         add_client_groups(fleio_client=client, whmcs_client=whmcs_client)
         sync_client_contacts(fleio_client=client, whmcs_client=whmcs_client)
     return whmcs_client.id
