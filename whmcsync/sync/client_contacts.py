@@ -41,15 +41,17 @@ def sync_client_contacts(fleio_client: Client, whmcs_client: Tblclients):
     synced_contacts = 0
     for wcontact in Tblcontacts.objects.filter(userid=whmcs_client.id):
         with transaction.atomic():
-            try:
-                SyncedAccount.objects.get(whmcs_id=whmcs_client.id, whmcs_uuid=whmcs_client.uuid)
-            except SyncedAccount.DoesNotExist:
-                existing_client = Client.objects.filter(external_billing_id=whmcs_client.uuid).first()
-                if not existing_client:
-                    LOG.warning(
-                        'Skip contact {} for client {}. Client not synced'.format(wcontact.firstname, whmcs_client.id)
-                    )
-                    continue
+            synced_account = SyncedAccount.objects.filter(
+                whmcs_id=whmcs_client.id, whmcs_uuid=whmcs_client.uuid
+            ).first()
+            existing_client = synced_account.client if synced_account else Client.objects.filter(
+                external_billing_id=whmcs_client.uuid
+            ).first()
+            if not existing_client:
+                LOG.warning(
+                    'Skip contact {} for client {}. Client not synced'.format(wcontact.firstname, whmcs_client.id)
+                )
+                continue
 
             created = False
             contact = Contact.objects.filter(client=fleio_client, email=wcontact.email).first()

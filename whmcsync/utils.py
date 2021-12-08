@@ -39,7 +39,7 @@ class PasswordTypes:
             return PasswordTypes.UNKNOWN
 
     @staticmethod
-    def password_match(password, stored_password, hint=''):
+    def password_match(password, stored_password: str, hint=''):
         try:
             pass_type = PasswordTypes.get_type(stored_password)
         except Exception as e:
@@ -47,7 +47,7 @@ class PasswordTypes:
             return None
         if pass_type == PasswordTypes.BCRYPT:
             try:
-                return bcrypt.checkpw(password.encode('utf-8'), stored_password.password.encode('utf-8'))
+                return bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8'))
             except Exception as e:
                 LOG.exception(e)
                 return None

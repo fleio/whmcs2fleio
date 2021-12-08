@@ -4,24 +4,33 @@ from whmcsync.whmcsync.utils import PasswordTypes
 from .models import SyncedAccount
 
 
+AppUser = get_user_model()
+
+
 class WhmcSyncAuthBackend:
     @staticmethod
     def authenticate(request, username=None, password=None):
-        try:
-            synced_client = SyncedAccount.objects.get(user__username=username)
-        except SyncedAccount.DoesNotExist:
-            return None
+        synced_account = SyncedAccount.objects.filter(user__username=username).first()
+        if synced_account:
+            if (not synced_account.password_synced and
+                    PasswordTypes.password_match(password=password, stored_password=synced_account.user.password)):
+                synced_account.user.set_password(password)
+                synced_account.user.save()
+                synced_account.password_synced = True
+                synced_account.save(update_fields=['password_synced'])
+                return synced_account.user
+            else:
+                return None
         else:
-            if (not synced_client.password_synced and
-                    PasswordTypes.password_match(password=password, stored_password=synced_client.user.password)):
-                synced_client.user.set_password(password)
-                synced_client.user.save()
-                synced_client.password_synced = True
-                synced_client.save(update_fields=['password_synced'])
-                return synced_client.user
+            # SyncedAccount not there yet
+            user = AppUser.objects.filter(username=username).first()
+            if not user:
+                return None
+            if PasswordTypes.password_match(password=password, stored_password=user.password):
+                user.set_password(password)
+                return user
             else:
                 return None
 
     def get_user(self, user_id):
-        user = get_user_model()
-        return user.objects.get(id=user_id)
+        return AppUser.objects.get(id=user_id)
