@@ -65,6 +65,9 @@ If you wish to import additional data, these models will help.
 After installing this app, do not forget to run **django migrate** to setup the new whmcsync database in Fleio.
 This database is used to allow authentication for users with their old password.
 
+To import tickets, ticket replies & ticket notes attachments, add the attachments' dir from whmcs at the 
+same location as this readme (after adding repo files to fleio installation).
+
 To see import options, activate Fleio environment and run `django whmcsync -h`.
 
 
@@ -81,3 +84,12 @@ To see import options, activate Fleio environment and run `django whmcsync -h`.
 #### Tax rules:
 
 - tax rules that apply to all countries in WHMCS are not imported since Fleio does not support this
+
+#### Tickets
+
+- ! importing tickets works only using Fleio 2022.01.1 and above
+- tickets, ticket replies & notes created by admins will match staff users in fleio by their related 
+WHMCS admin field which represents first name and last name of the admin at the date of creation of 
+the ticket/reply/note
+- Fleio does not support multiple predefined reply categories using the same name so only the 
+first by ID category from WHMCS will be imported with related predefined replies

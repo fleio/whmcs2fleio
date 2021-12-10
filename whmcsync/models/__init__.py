@@ -16,6 +16,13 @@ from .tbltax import Tbltax
 from .tblusers import Tblusers
 from .tblusersclients import TblusersClients
 from .tbladmins import Tbladmins
+from .tblticketdepartments import Tblticketdepartments
+from .tbltickets import Tbltickets
+from .tblticketreplies import Tblticketreplies
+from .tblticketnotes import Tblticketnotes
+from .tblticketpredefinedcats import Tblticketpredefinedcats
+from .tblticketpredefinedreplies import Tblticketpredefinedreplies
+from .tblticketmaillog import Tblticketmaillog
 
 __all__ = ['Tblaccounts',
            'Tblcancelrequests',
@@ -34,4 +41,11 @@ __all__ = ['Tblaccounts',
            'Tblusers',
            'TblusersClients',
            'Tbladmins',
+           'Tblticketdepartments',
+           'Tbltickets',
+           'Tblticketreplies',
+           'Tblticketnotes',
+           'Tblticketpredefinedcats',
+           'Tblticketpredefinedreplies',
+           'Tblticketmaillog',
            'SyncedAccount']

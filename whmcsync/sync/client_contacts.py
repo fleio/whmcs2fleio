@@ -2,15 +2,17 @@ import logging
 
 from django.db import transaction
 
-from fleio.core.models import AppUser
 from fleio.core.models import Client
-from fleio.core.models import UserToClient
-from plugins.domains.models import Contact
 from whmcsync.whmcsync.models import SyncedAccount
 from whmcsync.whmcsync.models import Tblclients
 from .utils import FieldToSync
 from .utils import sync_fields
 from ..models import Tblcontacts
+
+try:
+    from plugins.domains.models import Contact
+except (ImportError, RuntimeError):
+    Contact = None
 
 LOG = logging.getLogger('whmcsync')
 
