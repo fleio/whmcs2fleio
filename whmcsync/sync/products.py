@@ -16,7 +16,7 @@ from ..utils import WHMCS_LOGGER
 
 try:
     from plugins.cpanelserver.models import CpanelServerProductSettings
-except ImportError:
+except (ImportError, RuntimeError):
     CpanelServerProductSettings = None
 
 

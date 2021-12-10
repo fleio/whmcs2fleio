@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from fleio.conf.utils import fernet_encrypt
 from whmcsync.whmcsync.exceptions import DBSyncException
+from whmcsync.whmcsync.models import Tbladmins
 from whmcsync.whmcsync.utils import WHMCS_LOGGER
 
 
@@ -61,3 +62,12 @@ def date_to_datetime(date):
     dt = datetime.combine(date, datetime.min.time())
     return set_tz(dt, tz=timezone.utc)
 
+
+def match_admin_by_name(admin_name: str):
+    if not admin_name:
+        return None
+    possible_related_admins = Tbladmins.objects.all()
+    for possible_related_admin in possible_related_admins:
+        if '{} {}'.format(possible_related_admin.firstname, possible_related_admin.lastname) == admin_name:
+            return possible_related_admin
+    return None
