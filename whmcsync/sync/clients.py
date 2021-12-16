@@ -4,7 +4,6 @@ from datetime import datetime
 from django.db import transaction
 from django.utils import timezone
 
-from common.logger import get_fleio_logger
 from fleio.core.models import Client
 from fleio.core.models import ClientStatus
 from whmcsync.whmcsync.exceptions import DBSyncException
@@ -16,8 +15,7 @@ from whmcsync.whmcsync.operations import sync_client_credit
 from whmcsync.whmcsync.sync.client_contacts import sync_client_contacts
 from whmcsync.whmcsync.sync.utils import FieldToSync
 from whmcsync.whmcsync.sync.utils import sync_fields
-
-LOG = get_fleio_logger('whmcsync')
+from whmcsync.whmcsync.utils import WHMCS_LOGGER
 
 
 class ClientField(FieldToSync):
@@ -72,7 +70,7 @@ def sync_client(id, whmcs_client=None):
 
     whmcs_status_to_fleio = whmcs_client.status.lower()
     if whmcs_status_to_fleio not in ClientStatus.name_map.keys():
-        LOG.warning(
+        WHMCS_LOGGER.warning(
             'WHMCS client {} status not compatible with Fleio statuses. Fallback on inactive status.'.format(id)
         )
         whmcs_status_to_fleio = ClientStatus.inactive
@@ -123,7 +121,7 @@ def sync_clients(fail_fast, whmcs_ids=None, active_only=False):
                                                             client.companyname,
                                                             synced_id))
         except Exception as ex:
-            LOG.exception(ex)
+            WHMCS_LOGGER.exception(ex)
             if fail_fast:
                 exception_list.append(ex)
                 break

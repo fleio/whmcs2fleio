@@ -1,16 +1,15 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from common.logger import get_fleio_logger
 from fleio.core.models import Client
 from fleio.core.models import UserToClient
 from ..models import SyncedAccount
 from ..models import Tblclients
 from ..models import Tblusers
 from ..models import TblusersClients
+from ..utils import WHMCS_LOGGER
 
 AppUser = get_user_model()
-LOG = get_fleio_logger('whmcsync')
 
 
 def get_partially_synced_account(whmcs_client: Tblclients, fleio_client: Client) -> SyncedAccount:
@@ -53,7 +52,7 @@ def sync_user_to_clients(fail_fast, related_to_clients=None):
             whmcs_client = Tblclients.objects.filter(id=whmcs_u2c.client_id).first()
             fleio_client = get_related_fleio_client(whmcs_client=whmcs_client)
             if not fleio_client:
-                LOG.warning(
+                WHMCS_LOGGER.warning(
                     'Cannot sync UserToClient (whmcs id: {}) as related client ({}) is not synced in Fleio.'.format(
                         whmcs_u2c.id, whmcs_u2c.client_id
                     )
@@ -61,7 +60,7 @@ def sync_user_to_clients(fail_fast, related_to_clients=None):
                 continue
             fleio_user = get_related_fleio_user(whmcs_user_id=whmcs_u2c.auth_user_id)
             if not fleio_user:
-                LOG.warning(
+                WHMCS_LOGGER.warning(
                     'Cannot sync UserToClient (whmcs id: {}) as related user ({}) is not synced in Fleio.'.format(
                         whmcs_u2c.id, whmcs_u2c.auth_user_id
                     )
@@ -82,13 +81,13 @@ def sync_user_to_clients(fail_fast, related_to_clients=None):
                     partially_synced_account.user = fleio_user
                     partially_synced_account.save(update_fields=['user'])
         except Exception as e:
-            LOG.exception(e)
+            WHMCS_LOGGER.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
         else:
             u2c_list.append(fleio_u2c)
             if created:
-                LOG.info('Imported user to client relation {}'.format(fleio_u2c))
+                WHMCS_LOGGER.info('Imported user to client relation {}'.format(fleio_u2c))
     return u2c_list, exception_list
 
