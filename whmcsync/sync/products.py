@@ -1,6 +1,5 @@
 from django.db import transaction
 
-from common.logger import get_fleio_logger
 from fleio.billing.models import Product
 from fleio.billing.models import ProductGroup
 from fleio.billing.models import ProductModule
@@ -13,13 +12,12 @@ from whmcsync.whmcsync.models import Tblproductgroups
 from whmcsync.whmcsync.sync.product_cycles import sync_product_cycles
 from .servers import get_fleio_server_group_by_whmcs_id
 from ..models import Tblproducts
+from ..utils import WHMCS_LOGGER
 
 try:
     from plugins.cpanelserver.models import CpanelServerProductSettings
 except ImportError:
     CpanelServerProductSettings = None
-
-LOG = get_fleio_logger('whmcsync')
 
 
 def sync_products(fail_fast):
@@ -47,7 +45,7 @@ def sync_products(fail_fast):
                 sync_cpanel_module_settings(fleio_product=fleio_prod, whmcs_product=whmcs_product)
                 sync_product_cycles(fleio_product=fleio_prod, whmcs_product=whmcs_product)
         except Exception as e:
-            LOG.exception(e)
+            WHMCS_LOGGER.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
@@ -121,6 +119,8 @@ def sync_cpanel_module_settings(fleio_product: Product, whmcs_product: Tblproduc
                 'default_plan': whmcs_product.configoption1,
                 'server_group': server_group}
         )
-        LOG.debug('Synced cPanel settings for {} plan: {} server group: {}'.format(fleio_product.name,
-                                                                                   module_settings.default_plan,
-                                                                                   server_group.name))
+        WHMCS_LOGGER.debug(
+            'Synced cPanel settings for {} plan: {} server group: {}'.format(
+                fleio_product.name, module_settings.default_plan, server_group.name
+            )
+        )

@@ -1,7 +1,6 @@
 from django.db import transaction
 from django.utils.translation import ugettext_lazy as _
 
-from common.logger import get_fleio_logger
 from fleio.conf.utils import fernet_encrypt
 from fleio.core.models import Plugin
 from fleio.servers.models import HostingServerSettings
@@ -13,8 +12,7 @@ from .utils import sync_fields
 from ..models import Tblservergroups
 from ..models import Tblservergroupsrel
 from ..models import Tblservers
-
-LOG = get_fleio_logger('whmcsync')
+from ..utils import WHMCS_LOGGER
 
 DEFAULT_UNKNOWN_GROUP = 'WHMCS Unknown'
 
@@ -47,9 +45,9 @@ def sync_server_groups(options):
                 msg = _('New server group created: {}').format(group.name)
             else:
                 msg = _('Server group "{}" updated').format(group.name)
-            LOG.debug(msg)
+            WHMCS_LOGGER.debug(msg)
         except Exception as e:
-            LOG.exception(e)
+            WHMCS_LOGGER.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
@@ -79,7 +77,7 @@ def sync_servers(options):
                 settings.save()
                 name_list.append(server.name)
         except Exception as e:
-            LOG.exception(e)
+            WHMCS_LOGGER.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
@@ -112,7 +110,7 @@ def get_fleio_server_plugin(whmcs_server: Tblservers):
     if whmcs_server_type == 'cpanel':
         return Plugin.objects.filter(app_label='cpanelserver').first()
     else:
-        LOG.warning(
+        WHMCS_LOGGER.warning(
             'Fallback to Fleio TODO plugin (if exists) for server {} with server type {}'.format(whmcs_server.name,
                                                                                                  whmcs_server_type)
         )

@@ -4,7 +4,7 @@ import hmac
 import hashlib
 import re
 
-LOG = logging.getLogger('whmcsync')
+WHMCS_LOGGER = logging.getLogger('whmcsync')
 
 
 class PasswordTypes:
@@ -43,19 +43,19 @@ class PasswordTypes:
         try:
             pass_type = PasswordTypes.get_type(stored_password)
         except Exception as e:
-            LOG.exception(e)
+            WHMCS_LOGGER.exception(e)
             return None
         if pass_type == PasswordTypes.BCRYPT:
             try:
                 return bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8'))
             except Exception as e:
-                LOG.exception(e)
+                WHMCS_LOGGER.exception(e)
                 return None
         elif pass_type == PasswordTypes.HMAC:
             try:
                 hmac_hash, secret = stored_password.split(':')
             except (TypeError, ValueError):
-                LOG.error('Invalid WHMCS hmac password {}'.format(hint))
+                WHMCS_LOGGER.error('Invalid WHMCS hmac password {}'.format(hint))
             else:
                 digest = hmac.new(key=secret.encode('utf-8'),
                                   msg=password,
@@ -65,7 +65,7 @@ class PasswordTypes:
             try:
                 md5hash_whmcs, salt = stored_password.split(':')
             except (TypeError, ValueError):
-                LOG.error('Invalid MD5 salted password: {}'.format(hint))
+                WHMCS_LOGGER.error('Invalid MD5 salted password: {}'.format(hint))
                 return None
             md5hash_password = hashlib.md5(''.join((salt, password)))
             return md5hash_whmcs == md5hash_password.hexdigest()

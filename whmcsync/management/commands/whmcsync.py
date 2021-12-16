@@ -14,6 +14,7 @@ from whmcsync.whmcsync.sync.services import sync_services
 from whmcsync.whmcsync.sync.tax_rules import sync_tax_rules
 from whmcsync.whmcsync.sync.user_to_clients import sync_user_to_clients
 from whmcsync.whmcsync.sync.users import sync_users
+from whmcsync.whmcsync.utils import WHMCS_LOGGER
 
 
 class Command(BaseCommand):
@@ -96,6 +97,10 @@ class Command(BaseCommand):
                             dest='users',
                             default=False,
                             help='Sync users.')
+        parser.add_argument('--log-level',
+                            nargs='?',
+                            choices=['WARNING', 'INFO', 'DEBUG', 'ERROR', 'CRITICAL'],
+                            help='Set log level. Defaults to WARNING.')
         parser.add_argument('--dry-run',
                             action='store_true',
                             dest='dryrun',
@@ -146,9 +151,13 @@ class Command(BaseCommand):
                           % (len(products_list), len(exception_list)))
 
     def _sync_tax_rules(self, options):
-        taxes_list, exception_list = sync_tax_rules(fail_fast=options.get('failfast', False))
-        self.stdout.write('\nNumber of synced tax rules: %d \nNumber of tax rules failed to sync: %s'
-                          % (len(taxes_list), len(exception_list)))
+        taxes_list, exception_list, skipped_list = sync_tax_rules(fail_fast=options.get('failfast', False))
+        self.stdout.write(
+            '\nNumber of synced tax rules: %d '
+            '\nNumber of tax rules failed to sync: %s '
+            '\nNumber of tax rules skipped: %d'
+            % (len(taxes_list), len(exception_list), len(skipped_list))
+        )
 
     def _sync_contacts(self, options):
         client_contacts_list, exception_list = sync_contacts(fail_fast=options.get('failfast'))
@@ -172,6 +181,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """Execute the sync command and take into account any parameters passed"""
+        WHMCS_LOGGER.setLevel(options.get('log_level') or 'WARNING')
 
         verify_settings(ignore_auth_backend=options.get('ignoreauthbackend'))
 

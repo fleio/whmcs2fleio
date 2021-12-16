@@ -1,13 +1,12 @@
 from django.contrib.auth import get_user_model
 
-from common.logger import get_fleio_logger
 from .utils import FieldToSync
 from .utils import sync_fields
 from ..models import Tblusers
 from ..models import TblusersClients
+from ..utils import WHMCS_LOGGER
 
 AppUser = get_user_model()
-LOG = get_fleio_logger('whmcsync')
 
 
 class UserField(FieldToSync):
@@ -25,7 +24,7 @@ def sync_users(fail_fast, related_to_clients=None):
     for whmcs_user in users_qs:
         created = False
         try:
-            fleio_user = AppUser.objects.filter(email=whmcs_user.email, username=whmcs_user.email).first()
+            fleio_user = AppUser.objects.filter(email=whmcs_user.email).first()
             if not fleio_user:
                 created = True
                 fleio_user = AppUser()
@@ -43,20 +42,20 @@ def sync_users(fail_fast, related_to_clients=None):
             sync_fields(fleio_record=fleio_user, whmcs_record=whmcs_user, fields_to_sync=user_fields_to_sync)
             fleio_user.save()
         except Exception as e:
-            LOG.exception(e)
+            WHMCS_LOGGER.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
         else:
             user_list.append(fleio_user)
             if created:
-                LOG.info(
+                WHMCS_LOGGER.info(
                     'Created Fleio user {} ({}) from WHMCS ({})'.format(
                         fleio_user.username, fleio_user.id, whmcs_user.id
                     )
                 )
             else:
-                LOG.info(
+                WHMCS_LOGGER.info(
                     'Updated Fleio user {} ({}) from WHMCS ({})'.format(
                         fleio_user.username, fleio_user.id, whmcs_user.id
                     )

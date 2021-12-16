@@ -4,7 +4,6 @@ import ipaddress
 from django.db import transaction
 from django.utils.timezone import now as utcnow
 
-from common.logger import get_fleio_logger
 from fleio.billing.models import CancellationRequest
 from fleio.billing.models import Product
 from fleio.billing.models import ProductModule
@@ -25,8 +24,8 @@ from whmcsync.whmcsync.models import Tblclients
 from whmcsync.whmcsync.models import Tblhosting
 from whmcsync.whmcsync.models import Tblproducts
 from whmcsync.whmcsync.sync.utils import date_to_datetime
+from whmcsync.whmcsync.utils import WHMCS_LOGGER
 
-LOG = get_fleio_logger('whmcsync')
 OPENSTACK_APP_LABEL = 'openstack'
 
 
@@ -144,8 +143,11 @@ def sync_service_hosting_account(whmcs_service: Tblhosting, fleio_service: Servi
             ipaddress.ip_address(whmcs_service.dedicatedip.strip())
             dedicated_ip = whmcs_service.dedicatedip.strip()
         except ValueError:
-            LOG.error('Unable to sync service {} IP: {}: Not a valid IP'.format(whmcs_service.domain,
-                                                                                whmcs_service.dedicatedip))
+            WHMCS_LOGGER.error(
+                'Unable to sync service {} IP: {}: Not a valid IP'.format(
+                    whmcs_service.domain, whmcs_service.dedicatedip
+                )
+            )
             dedicated_ip = None
     else:
         dedicated_ip = None
@@ -169,24 +171,28 @@ def sync_services(fail_fast):
 
         fleio_product = whmcs_service_to_fleio_product(whmcs_service=whmcs_service)
         if not fleio_product:
-            LOG.warning('Cannot sync whmcs service {} as Fleio related product is not synced'.format(whmcs_service.id))
+            WHMCS_LOGGER.warning(
+                'Cannot sync whmcs service {} as Fleio related product is not synced'.format(whmcs_service.id)
+            )
             continue
         if fleio_product.module.plugin_label == OPENSTACK_APP_LABEL:
-            LOG.debug(
-                'Skipping syncing for service {} as it\'s related to a Fleio OpenStack product'.format(whmcs_service.id)
+            WHMCS_LOGGER.debug(
+                'Skipping syncing for service {} as it\'s related to a Fleio OpenStack product'.format(
+                    whmcs_service.id
+                )
             )
             continue
 
         client = whmcs_service_to_client(whmcs_service=whmcs_service)
         if not client:
-            LOG.warning(
+            WHMCS_LOGGER.warning(
                 'Cannot sync whmcs service {} ({}) as Fleio related client (whmcs id: {}) is not synced'.format(
                     whmcs_service.id, whmcs_service.domain, whmcs_service.userid
                 )
             )
             continue
 
-        LOG.debug('Syncing service: {}'.format(whmcs_service.domain or fleio_product.name))
+        WHMCS_LOGGER.debug('Syncing service: {}'.format(whmcs_service.domain or fleio_product.name))
         try:
             with transaction.atomic():
                 product_cycle = get_fleio_product_cycle(whmcs_service=whmcs_service, currency=client.currency)
@@ -224,16 +230,17 @@ def sync_services(fail_fast):
                 service_list.append(service.display_name)
 
         except Exception as e:
-            LOG.exception(e)
+            WHMCS_LOGGER.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
 
     num_excluded = Tblhosting.objects.filter(packageid__lte=0).count()
     if num_excluded:
-        LOG.warning('The following services without a product associated were excluded:')
+        WHMCS_LOGGER.warning('The following services without a product associated were excluded:')
         for excluded_service in Tblhosting.objects.filter(packageid__lte=0):
-            LOG.warning('ID: {} Domain: "{}" Billing cycle: {}'.format(excluded_service.id,
-                                                                       excluded_service.domain,
-                                                                       excluded_service.billingcycle))
+            WHMCS_LOGGER.warning(
+                'ID: {} Domain: "{}" Billing cycle: {}'.format(
+                    excluded_service.id, excluded_service.domain, excluded_service.billingcycle)
+            )
     return service_list, exception_list

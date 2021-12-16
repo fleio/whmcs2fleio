@@ -4,11 +4,9 @@ from typing import Optional
 
 from django.utils import timezone
 
-from common.logger import get_fleio_logger
 from fleio.conf.utils import fernet_encrypt
 from whmcsync.whmcsync.exceptions import DBSyncException
-
-LOG = get_fleio_logger('whmcsync')
+from whmcsync.whmcsync.utils import WHMCS_LOGGER
 
 
 class FieldToSync:
@@ -37,7 +35,7 @@ def sync_fields(fleio_record, whmcs_record, fields_to_sync: List[FieldToSync]):
                         'WHMCS {} value cannot be saved because it already overflows Fleio related field ({}) '
                         'max_length and also has to be encrypted'.format(field.whmcs_key, field.fleio_key)
                     )
-                LOG.warning(
+                WHMCS_LOGGER.warning(
                     'Had to truncate field {} for {} with ID {}'.format(
                         field.whmcs_key, field.record_name, whmcs_record.id
                     )
@@ -49,7 +47,7 @@ def sync_fields(fleio_record, whmcs_record, fields_to_sync: List[FieldToSync]):
                 whmcs_value = field.default
             setattr(fleio_record, field.fleio_key, whmcs_value)
         except TypeError as e:
-            LOG.error('Error while trying to set field {}: {}'.format(field.fleio_key, e))
+            WHMCS_LOGGER.error('Error while trying to set field {}: {}'.format(field.fleio_key, e))
             raise
 
 
