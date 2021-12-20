@@ -36,7 +36,8 @@ class PasswordTypes:
         elif PasswordTypes.PATTERN_MD5.match(password):
             return PasswordTypes.MD5
         else:
-            return PasswordTypes.UNKNOWN
+            # if not found default to BCRYPT
+            return PasswordTypes.BCRYPT
 
     @staticmethod
     def password_match(password, stored_password: str, hint=''):

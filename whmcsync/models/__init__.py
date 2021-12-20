@@ -15,6 +15,7 @@ from .tblservers import Tblservers
 from .tbltax import Tbltax
 from .tblusers import Tblusers
 from .tblusersclients import TblusersClients
+from .tbladmins import Tbladmins
 
 __all__ = ['Tblaccounts',
            'Tblcancelrequests',
@@ -32,4 +33,5 @@ __all__ = ['Tblaccounts',
            'Tbltax',
            'Tblusers',
            'TblusersClients',
+           'Tbladmins',
            'SyncedAccount']
