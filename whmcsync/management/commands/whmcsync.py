@@ -11,6 +11,7 @@ from whmcsync.whmcsync.sync.products import sync_products
 from whmcsync.whmcsync.sync.servers import sync_server_groups
 from whmcsync.whmcsync.sync.servers import sync_servers
 from whmcsync.whmcsync.sync.services import sync_services
+from whmcsync.whmcsync.sync.staff_users import sync_staff_users
 from whmcsync.whmcsync.sync.tax_rules import sync_tax_rules
 from whmcsync.whmcsync.sync.user_to_clients import sync_user_to_clients
 from whmcsync.whmcsync.sync.users import sync_users
@@ -145,6 +146,11 @@ class Command(BaseCommand):
         self.stdout.write('\nNumber of synced users: %d \nNumber of users failed to sync: %s'
                           % (len(users_list), len(exception_list)))
 
+    def _sync_staff_users(self, fail_fast=False):
+        users_list, exception_list = sync_staff_users(fail_fast=fail_fast,)
+        self.stdout.write('\nNumber of synced staff users: %d \nNumber of staff users failed to sync: %s'
+                          % (len(users_list), len(exception_list)))
+
     def _sync_products(self, options):
         products_list, exception_list = sync_products(fail_fast=options.get('failfast', False))
         self.stdout.write('\nNumber of synced products: %d \nNumber of products failed to sync: %s'
@@ -197,6 +203,7 @@ class Command(BaseCommand):
             sync_currencies(fail_fast=fail_fast, default=False)
 
         if options.get('users'):
+            self._sync_staff_users(fail_fast=fail_fast)
             self._sync_users(fail_fast=fail_fast)
 
         if options.get('clientgroups'):
