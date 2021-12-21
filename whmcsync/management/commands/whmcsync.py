@@ -7,6 +7,9 @@ from whmcsync.whmcsync.operations import verify_settings
 from whmcsync.whmcsync.sync.client_groups import sync_client_groups
 from whmcsync.whmcsync.sync.configurable_options import sync_configurable_options
 from whmcsync.whmcsync.sync.currencies import sync_currencies
+from whmcsync.whmcsync.sync.domains.domains import sync_domains
+from whmcsync.whmcsync.sync.domains.domains_registrars import sync_domain_registrars
+from whmcsync.whmcsync.sync.domains.domains_tlds import sync_tlds
 from whmcsync.whmcsync.sync.product_groups import sync_product_groups
 from whmcsync.whmcsync.sync.products import sync_products
 from whmcsync.whmcsync.sync.servers import sync_server_groups
@@ -127,6 +130,21 @@ class Command(BaseCommand):
                             dest='ticketpredefinedreplies',
                             default=False,
                             help='Sync ticket predefined replies & related categories.')
+        parser.add_argument('--domains-pricing',
+                            action='store_true',
+                            dest='domainspricing',
+                            default=False,
+                            help='Sync TLDs and their pricing.')
+        parser.add_argument('--domains-registrars',
+                            action='store_true',
+                            dest='domainsregistrars',
+                            default=False,
+                            help='Sync registrars for domains plugin.')
+        parser.add_argument('--domains',
+                            action='store_true',
+                            dest='domains',
+                            default=False,
+                            help='Sync domains with registrars.')
         parser.add_argument('--log-level',
                             nargs='?',
                             choices=['WARNING', 'INFO', 'DEBUG', 'ERROR', 'CRITICAL'],
@@ -209,6 +227,21 @@ class Command(BaseCommand):
             self.stdout.write('\nSuccessfully synced WHMCS contacts for client(s):\n')
             for client_contacts_display in client_contacts_list:
                 self.stdout.write(str(client_contacts_display), ending='\n')
+
+    def _sync_tlds(self, fail_fast):
+        tlds_list, exception_list = sync_tlds(fail_fast=fail_fast)
+        self.stdout.write('\nNumber of synced TLDs: %d \nNumber of TLDs failed to sync: %s'
+                          % (len(tlds_list), len(exception_list)))
+
+    def _sync_registrars(self, fail_fast):
+        registrars_list, exception_list = sync_domain_registrars(fail_fast=fail_fast)
+        self.stdout.write('\nNumber of synced registrars: %d \nNumber of registrars failed to sync: %s'
+                          % (len(registrars_list), len(exception_list)))
+
+    def _sync_domains(self, fail_fast):
+        domains_list, exception_list = sync_domains(fail_fast=fail_fast)
+        self.stdout.write('\nNumber of synced domains: %d \nNumber of domains failed to sync: %s'
+                          % (len(domains_list), len(exception_list)))
 
     def _sync_clients(self, options, whmcs_ids=None):
         client_list, exception_list = sync_clients(
@@ -327,3 +360,14 @@ class Command(BaseCommand):
             self._sync_ticket_predefined_reply_categories(options=options)
             self._sync_ticket_predefined_replies(options=options)
 
+        import_tlds = options.get('domainspricing')
+        import_domains = options.get('domains')
+        import_registrars = options.get('domainsregistrars')
+        if import_registrars or import_domains or import_tlds:
+            # registrars should be synced for all cases
+            self._sync_registrars(fail_fast=fail_fast)
+            if import_tlds:
+                self._sync_tlds(fail_fast=fail_fast)
+            if import_domains:
+                self._sync_tlds(fail_fast=fail_fast)
+                self._sync_domains(fail_fast=fail_fast)
