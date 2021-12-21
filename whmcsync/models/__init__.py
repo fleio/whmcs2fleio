@@ -29,6 +29,10 @@ from .configurable_options.tblproductconfigoptionssub import Tblproductconfigopt
 from .configurable_options.tblproductconfiggroups import Tblproductconfiggroups
 from .configurable_options.tblproductconfiglinks import Tblproductconfiglinks
 from .configurable_options.tblhostingconfigoptions import Tblhostingconfigoptions
+from .tbldomains import Tbldomains
+from .tbldomainpricing import Tbldomainpricing
+from .tblregistrars import Tblregistrars
+from .tblorders import Tblorders
 
 __all__ = ['Tblaccounts',
            'Tblcancelrequests',
@@ -61,4 +65,8 @@ __all__ = ['Tblaccounts',
            'Tblproductconfiggroups',
            'Tblproductconfiglinks',
            'Tblhostingconfigoptions',
+           'Tbldomains',
+           'Tbldomainpricing',
+           'Tblregistrars',
+           'Tblorders',
            'SyncedAccount']
