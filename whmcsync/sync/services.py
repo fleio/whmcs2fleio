@@ -4,12 +4,15 @@ import ipaddress
 from django.db import transaction
 from django.utils.timezone import now as utcnow
 
+from fleio.billing.cart.serializers import OrderItemSerializer
 from fleio.billing.models import CancellationRequest
+from fleio.billing.models import ConfigurableOption
 from fleio.billing.models import Product
 from fleio.billing.models import ProductModule
 from fleio.billing.models import Service
 from fleio.billing.models import ServiceHostingAccount
 from fleio.billing.models.calcelation_request import CancellationTypes
+from fleio.billing.models.configurable_option import ConfigurableOptionWidget
 from fleio.billing.models.product_cycle_periods import ProductCyclePeriods
 from fleio.billing.service_cycle_manager import ServiceCycleManager
 from fleio.billing.settings import ServiceStatus
@@ -22,11 +25,36 @@ from whmcsync.whmcsync.models import SyncedAccount
 from whmcsync.whmcsync.models import Tblcancelrequests
 from whmcsync.whmcsync.models import Tblclients
 from whmcsync.whmcsync.models import Tblhosting
+from whmcsync.whmcsync.models import Tblhostingconfigoptions
+from whmcsync.whmcsync.models import Tblproductconfigoptions
+from whmcsync.whmcsync.models import Tblproductconfigoptionssub
 from whmcsync.whmcsync.models import Tblproducts
 from whmcsync.whmcsync.sync.utils import date_to_datetime
 from whmcsync.whmcsync.utils import WHMCS_LOGGER
 
 OPENSTACK_APP_LABEL = 'openstack'
+
+
+def fleio_has_related_conf_opts(whmcs_service: Tblhosting):
+    service_related_conf_opts = Tblhostingconfigoptions.objects.filter(relid=whmcs_service.id)
+    fleio_has_all_options = True
+    for service_related_conf_opt in service_related_conf_opts:
+        if not fleio_has_all_options:
+            break
+        whmcs_related_conf_opt = Tblproductconfigoptions.objects.filter(id=service_related_conf_opt.configid).first()
+        whmcs_related_conf_opt_choice = Tblproductconfigoptionssub.objects.filter(
+            id=service_related_conf_opt.optionid,
+            configid=service_related_conf_opt.configid,
+        ).first()
+        fleio_option = ConfigurableOption.objects.filter(name=whmcs_related_conf_opt.optionname).first()
+        if fleio_option:
+            if fleio_option.has_choices:
+                fleio_has_all_options = fleio_option.choices.filter(
+                    choice=whmcs_related_conf_opt_choice.optionname
+                ).exists()
+        else:
+            fleio_has_all_options = False
+    return fleio_has_all_options
 
 
 def whmcs_service_to_client(whmcs_service: Tblhosting):
@@ -163,8 +191,48 @@ def sync_service_hosting_account(whmcs_service: Tblhosting, fleio_service: Servi
                                                                  'package_name': whmcs_product.configoption1})
 
 
+def sync_service_conf_opts(whmcs_service: Tblhosting, fleio_service: Service):
+    fleio_service.configurable_options.clear()
+    for hosting_opt in Tblhostingconfigoptions.objects.filter(relid=whmcs_service.id):
+        whmcs_option = Tblproductconfigoptions.objects.get(id=hosting_opt.configid)
+        fleio_conf_option = ConfigurableOption.objects.filter(name=whmcs_option.optionname).first()
+        if fleio_conf_option.widget == ConfigurableOptionWidget.yesno:
+            option_value = 'yes' if hosting_opt.qty > 0 else 'no'
+        elif fleio_conf_option.has_quantity:
+            option_value = '{}'.format(hosting_opt.qty)
+        else:
+            option_value = ''
+        if fleio_conf_option.has_choices:
+            whmcs_choice = Tblproductconfigoptionssub.objects.get(id=hosting_opt.optionid)
+            fleio_choice = fleio_conf_option.choices.filter(choice=whmcs_choice.optionname).first()
+            option_value = fleio_choice.choice
+
+        quantity = hosting_opt.qty if fleio_conf_option.has_quantity else 1  # Fleio needs 1 as quantity for all opts
+
+        unit_price, price, setup_fee = fleio_conf_option.get_price_by_cycle_quantity_and_choice(
+            cycle_name=fleio_service.cycle.cycle,
+            cycle_multiplier=fleio_service.cycle.cycle_multiplier,
+            currency=fleio_service.client.currency,
+            quantity=quantity,
+            choice_value=option_value if fleio_conf_option.has_choices else None,
+            option_value=option_value,
+        )
+
+        fleio_service.configurable_options.create(
+            option=fleio_conf_option,
+            option_value=option_value,
+            quantity=quantity,
+            has_price=price > decimal.Decimal(0),
+            taxable=fleio_service.product.taxable,
+            price=price,
+            unit_price=unit_price,
+            setup_fee=setup_fee
+        )
+
+
 def sync_services(fail_fast):
     exception_list = []
+    skipped_list = []
     service_list = []
     # NOTE: filter all products except for fleio products, for cases when the WHMCS module was used
     for whmcs_service in Tblhosting.objects.exclude(packageid__lte=0):
@@ -172,8 +240,9 @@ def sync_services(fail_fast):
         fleio_product = whmcs_service_to_fleio_product(whmcs_service=whmcs_service)
         if not fleio_product:
             WHMCS_LOGGER.warning(
-                'Cannot sync whmcs service {} as Fleio related product is not synced'.format(whmcs_service.id)
+                'Cannot sync whmcs service {} as Fleio related product is not imported'.format(whmcs_service.id)
             )
+            skipped_list.append(whmcs_service.id)
             continue
         if fleio_product.module.plugin_label == OPENSTACK_APP_LABEL:
             WHMCS_LOGGER.debug(
@@ -181,15 +250,26 @@ def sync_services(fail_fast):
                     whmcs_service.id
                 )
             )
+            # those are simply ignored, do not add in skipped services
             continue
 
         client = whmcs_service_to_client(whmcs_service=whmcs_service)
         if not client:
             WHMCS_LOGGER.warning(
-                'Cannot sync whmcs service {} ({}) as Fleio related client (whmcs id: {}) is not synced'.format(
+                'Cannot sync whmcs service {} ({}) as Fleio related client (whmcs id: {}) is not imported'.format(
                     whmcs_service.id, whmcs_service.domain, whmcs_service.userid
                 )
             )
+            skipped_list.append(whmcs_service.id)
+            continue
+
+        if not fleio_has_related_conf_opts(whmcs_service=whmcs_service):
+            WHMCS_LOGGER.warning(
+                'Cannot sync whmcs service {} ({}) as Fleio related conf. options are not imported'.format(
+                    whmcs_service.id, whmcs_service.domain,
+                )
+            )
+            skipped_list.append(whmcs_service.id)
             continue
 
         WHMCS_LOGGER.debug('Syncing service: {}'.format(whmcs_service.domain or fleio_product.name))
@@ -227,6 +307,7 @@ def sync_services(fail_fast):
 
                 sync_cancellation_request_if_exists(whmcs_service=whmcs_service, fleio_service=service)
                 sync_service_hosting_account(whmcs_service=whmcs_service, fleio_service=service)
+                sync_service_conf_opts(whmcs_service=whmcs_service, fleio_service=service)
                 service_list.append(service.display_name)
 
         except Exception as e:
@@ -243,4 +324,4 @@ def sync_services(fail_fast):
                 'ID: {} Domain: "{}" Billing cycle: {}'.format(
                     excluded_service.id, excluded_service.domain, excluded_service.billingcycle)
             )
-    return service_list, exception_list
+    return service_list, exception_list, skipped_list

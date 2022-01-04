@@ -1,3 +1,4 @@
+import decimal
 from datetime import datetime
 from typing import List
 from typing import Optional
@@ -71,3 +72,10 @@ def match_admin_by_name(admin_name: str):
         if '{} {}'.format(possible_related_admin.firstname, possible_related_admin.lastname) == admin_name:
             return possible_related_admin
     return None
+
+
+def get_whmcs_price(price):
+    if decimal.Decimal(price) < decimal.Decimal('0.00'):
+        return decimal.Decimal('0.00')
+    else:
+        return decimal.Decimal(price)

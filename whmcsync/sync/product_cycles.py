@@ -5,13 +5,7 @@ from fleio.billing.settings import PublicStatuses
 from fleio.core.models import Currency
 from whmcsync.whmcsync.models import Tblcurrencies
 from whmcsync.whmcsync.models import Tblpricing
-
-
-def get_whmcs_price(price):
-    if decimal.Decimal(price) < decimal.Decimal('0.00'):
-        return decimal.Decimal('0.00')
-    else:
-        return decimal.Decimal(price)
+from whmcsync.whmcsync.sync.utils import get_whmcs_price
 
 
 def get_fleio_currency(whmcs_currency_id):

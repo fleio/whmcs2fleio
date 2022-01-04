@@ -23,6 +23,11 @@ from .tblticketnotes import Tblticketnotes
 from .tblticketpredefinedcats import Tblticketpredefinedcats
 from .tblticketpredefinedreplies import Tblticketpredefinedreplies
 from .tblticketmaillog import Tblticketmaillog
+from .configurable_options.tblproductconfigoptions import Tblproductconfigoptions
+from .configurable_options.tblproductconfigoptionssub import Tblproductconfigoptionssub
+from .configurable_options.tblproductconfiggroups import Tblproductconfiggroups
+from .configurable_options.tblproductconfiglinks import Tblproductconfiglinks
+from .configurable_options.tblhostingconfigoptions import Tblhostingconfigoptions
 
 __all__ = ['Tblaccounts',
            'Tblcancelrequests',
@@ -48,4 +53,10 @@ __all__ = ['Tblaccounts',
            'Tblticketpredefinedcats',
            'Tblticketpredefinedreplies',
            'Tblticketmaillog',
+           'Tblproductconfigoptions',
+           'Tblproductconfigoptionssub',
+           'Tblproductconfiggroups',
+           'Tblproductconfiggroups',
+           'Tblproductconfiglinks',
+           'Tblhostingconfigoptions',
            'SyncedAccount']
