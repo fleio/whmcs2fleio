@@ -7,10 +7,11 @@ The current WHMCSync app supports the following:
 * Clients groups
 * Client contacts
 * Servers
-* Servers groups
+* Server groups
 * Products
 * Product groups
 * Product prices
+* Configurable options data
 * Services
 * Services hosting account settings
 * Cancellation requests
@@ -76,6 +77,11 @@ To see import options, activate Fleio environment and run `django whmcsync -h`.
 #### Staff users:
 
 - staff users are imported as inactive, so super admins in Fleio can review their permissions
+
+#### Configurable options:
+
+- configurable options are matched by name, thus if you have duplicated conf. options by name 
+only the last one will be imported, others will be overridden
 
 #### Servers:
 

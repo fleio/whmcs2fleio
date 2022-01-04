@@ -5,6 +5,7 @@ from whmcsync.whmcsync.sync.client_contacts import sync_contacts
 from whmcsync.whmcsync.sync.clients import sync_clients
 from whmcsync.whmcsync.operations import verify_settings
 from whmcsync.whmcsync.sync.client_groups import sync_client_groups
+from whmcsync.whmcsync.sync.configurable_options import sync_configurable_options
 from whmcsync.whmcsync.sync.currencies import sync_currencies
 from whmcsync.whmcsync.sync.product_groups import sync_product_groups
 from whmcsync.whmcsync.sync.products import sync_products
@@ -70,6 +71,11 @@ class Command(BaseCommand):
                             dest='products',
                             default=False,
                             help='Sync all products and product groups from WHMCS')
+        parser.add_argument('--configurable-options',
+                            action='store_true',
+                            dest='configurableoptions',
+                            default=False,
+                            help='Sync all configurable options from WHMCS')
         parser.add_argument('--services',
                             action='store_true',
                             dest='services',
@@ -152,9 +158,13 @@ class Command(BaseCommand):
                           % (len(servers_list), len(exception_list)))
 
     def _sync_services(self, options):
-        services_list, exception_list = sync_services(fail_fast=options.get('failfast', False))
-        self.stdout.write('\nNumber of synced services: %d \nNumber of services failed to sync: %s'
-                          % (len(services_list), len(exception_list)))
+        services_list, exception_list, skipped_list = sync_services(fail_fast=options.get('failfast', False))
+        self.stdout.write(
+            '\nNumber of synced services: %d \n'
+            'Number of services failed to sync: %s\n'
+            'Number of skipped services (missing related data): %s'
+            % (len(services_list), len(exception_list), len(skipped_list))
+        )
 
     def _sync_product_groups(self, options):
         product_groups_list, exception_list = sync_product_groups(fail_fast=options.get('failfast', False))
@@ -178,6 +188,11 @@ class Command(BaseCommand):
         products_list, exception_list = sync_products(fail_fast=options.get('failfast', False))
         self.stdout.write('\nNumber of synced products: %d \nNumber of products failed to sync: %s'
                           % (len(products_list), len(exception_list)))
+
+    def _sync_configurable_options(self, fail_fast):
+        conf_options_list, exception_list = sync_configurable_options(fail_fast=fail_fast)
+        self.stdout.write('\nNumber of synced conf. options: %d \nNumber of conf. options failed to sync: %s'
+                          % (len(conf_options_list), len(exception_list)))
 
     def _sync_tax_rules(self, options):
         taxes_list, exception_list, skipped_list = sync_tax_rules(fail_fast=options.get('failfast', False))
@@ -291,6 +306,10 @@ class Command(BaseCommand):
             self._sync_server_groups(options=options)  # sync server groups for module settings (e.g. cpanel server)
             self._sync_currencies(options=options)
             self._sync_products(options=options)
+
+        if options.get('configurableoptions'):
+            self._sync_currencies(options=options)
+            self._sync_configurable_options(fail_fast=fail_fast)
 
         if options.get('services'):
             # if trying to sync service without related client/product already synced, it will be skipped with a warning
