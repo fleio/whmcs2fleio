@@ -11,6 +11,7 @@ from fleio.billing.settings import PublicStatuses
 from whmcsync.whmcsync.models import Tblproductgroups
 from whmcsync.whmcsync.sync.product_cycles import sync_product_cycles
 from .servers import get_fleio_server_group_by_whmcs_id
+from ..models import TblproductUpgradeProducts
 from ..models import Tblproducts
 from ..utils import WHMCS_LOGGER
 
@@ -18,6 +19,29 @@ try:
     from plugins.cpanelserver.models import CpanelServerProductSettings
 except (ImportError, RuntimeError):
     CpanelServerProductSettings = None
+
+
+def sync_product_upgrades():
+    WHMCS_LOGGER.debug('Starting to import product upgrades.')
+    for whmcs_upgrade in TblproductUpgradeProducts.objects.all():
+        try:
+            whmcs_product = Tblproducts.objects.get(id=whmcs_upgrade.product_id)
+            whmcs_upgrade_product = Tblproducts.objects.get(id=whmcs_upgrade.upgrade_product_id)
+            fleio_product = Product.objects.filter(
+                code='{}_{}_{}'.format('whmcs', whmcs_product.id, whmcs_product.gid)
+            ).first()
+            fleio_upgrade_product = Product.objects.filter(
+                code='{}_{}_{}'.format('whmcs', whmcs_upgrade_product.id, whmcs_upgrade_product.gid)
+            ).first()
+            if fleio_product and fleio_upgrade_product:
+                fleio_product.upgrades.add(fleio_upgrade_product)
+        except Exception as e:
+            WHMCS_LOGGER.exception(e)
+            WHMCS_LOGGER.error(
+                'Error while trying to import product upgrade {} for product {}!'.format(
+                    whmcs_upgrade.upgrade_product_id, whmcs_upgrade.product_id
+                )
+            )
 
 
 def sync_products(fail_fast):
@@ -44,11 +68,19 @@ def sync_products(fail_fast):
                 name_list.append(fleio_prod.name)
                 sync_cpanel_module_settings(fleio_product=fleio_prod, whmcs_product=whmcs_product)
                 sync_product_cycles(fleio_product=fleio_prod, whmcs_product=whmcs_product)
+                for upgrade in fleio_prod.upgrades.all():
+                    # remove upgrades from imported product to other WHMCS products, they'll be re-added later
+                    if upgrade.code.startswith('whmcs'):
+                        fleio_prod.upgrades.remove(upgrade)
         except Exception as e:
             WHMCS_LOGGER.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
+
+    # import all upgrade relations for products
+    sync_product_upgrades()
+
     return name_list, exception_list
 
 

@@ -7,8 +7,9 @@ from .tblcontacts import Tblcontacts
 from .tblcurrencies import Tblcurrencies
 from .tblhosting import Tblhosting
 from .tblpricing import Tblpricing
-from .tblproductgroups import Tblproductgroups
-from .tblproducts import Tblproducts
+from whmcsync.whmcsync.models.products.tblproducts import Tblproducts
+from whmcsync.whmcsync.models.products.tblproductgroups import Tblproductgroups
+from whmcsync.whmcsync.models.products.tblproductupgradeproducts import TblproductUpgradeProducts
 from .tblservergroups import Tblservergroups
 from .tblservergroupsrel import Tblservergroupsrel
 from .tblservers import Tblservers
@@ -39,6 +40,7 @@ __all__ = ['Tblaccounts',
            'Tblpricing',
            'Tblproducts',
            'Tblproductgroups',
+           'TblproductUpgradeProducts',
            'Tblservers',
            'Tblservergroups',
            'Tblservergroupsrel',
