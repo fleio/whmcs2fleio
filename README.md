@@ -74,6 +74,10 @@ To see import options, activate Fleio environment and run `django whmcsync -h`.
 
 ### Known limitations
 
+#### Users:
+
+- users are imported without related permissions from WHMCS and have owner role on related client in Fleio
+
 #### Staff users:
 
 - staff users are imported as inactive, so super admins in Fleio can review their permissions
