@@ -8,8 +8,7 @@ from ..models import Tblclientgroups
 LOG = logging.getLogger('whmcsync')
 
 
-def sync_client_groups(options):
-    fail_fast = options.get('failfast', False)
+def sync_client_groups(fail_fast):
     exception_list = []
     name_list = []
     for group in Tblclientgroups.objects.all():

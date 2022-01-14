@@ -3,6 +3,7 @@ SUPPORTED RESOURCES
 
 The current WHMCSync app supports the following:
 
+* Users
 * Clients
 * Clients groups
 * Client contacts
@@ -18,14 +19,19 @@ The current WHMCSync app supports the following:
 * Currencies
 * Hosting accounts
 * Tax rules
+* Tickets data
+* Domains data
 
 
 
 WHMCS TO FLEIO SYNC INSTALLATION
 ================================
 
+Copy this directory to Fleio backend installation dir and rename it to "whmcsync" (so it would 
+look something like `fleio/backend/whmcsync`).
+
 Create a new database, call it *whmcs* and copy the actual WHMCS database here.
-This new database will be used to copy all the informations we need.
+This new database will be used to copy all the needed data.
 
 Add the database in Fleio settings.py:
 
@@ -58,6 +64,10 @@ AUTHENTICATION_BACKENDS = ('whmcsync.whmcsync.auth_backend.WhmcSyncAuthBackend',
     
 ```
 
+Activate Fleio env. and run `django migrate whmcsync` after finishing the above setup.
+
+Use the command by activating Fleio env. and running `django whmcsync` command from the backend dir.
+
 NOTES
 =====
 
@@ -71,6 +81,10 @@ same location as this readme (after adding repo files to fleio installation).
 
 To see import options, activate Fleio environment and run `django whmcsync -h`.
 
+You can run `django whmcsync --all-configs` first to setup everything is needed 
+for clients & other related data import (currencies, tax rules, products, etc).
+Then you can use the `--all-client-data` flag along with `django whmcsync --clients [whmcs_id, ]` 
+or `django whmcsync --all-clients` in order to import all client related data from a single run.
 
 ### Known limitations
 

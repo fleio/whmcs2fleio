@@ -1,6 +1,5 @@
-import logging
-
 from django.db import transaction
+from django.db.models import Q
 
 from fleio.core.models import Client
 from whmcsync.whmcsync.models import SyncedAccount
@@ -8,13 +7,12 @@ from whmcsync.whmcsync.models import Tblclients
 from .utils import FieldToSync
 from .utils import sync_fields
 from ..models import Tblcontacts
+from ..utils import WHMCS_LOGGER
 
 try:
     from plugins.domains.models import Contact
 except (ImportError, RuntimeError):
     Contact = None
-
-LOG = logging.getLogger('whmcsync')
 
 
 class ClientField(FieldToSync):
@@ -50,7 +48,7 @@ def sync_client_contacts(fleio_client: Client, whmcs_client: Tblclients):
                 external_billing_id=whmcs_client.uuid
             ).first()
             if not existing_client:
-                LOG.warning(
+                WHMCS_LOGGER.warning(
                     'Skip contact {} for client {}. Client not synced'.format(wcontact.firstname, whmcs_client.id)
                 )
                 continue
@@ -68,19 +66,29 @@ def sync_client_contacts(fleio_client: Client, whmcs_client: Tblclients):
             contact.save()
 
             if created:
-                LOG.info('Created contact {} for {} ({})'.format(contact.name, contact.client.name, contact.client_id))
+                WHMCS_LOGGER.info('Created contact {} for {} ({})'.format(
+                    contact.name, contact.client.name, contact.client_id)
+                )
             else:
-                LOG.info('Updated contact {} for {} ({})'.format(contact.name, contact.client.name, contact.client_id))
+                WHMCS_LOGGER.info('Updated contact {} for {} ({})'.format(
+                    contact.name, contact.client.name, contact.client_id)
+                )
 
             synced_contacts += 1
     return synced_contacts
 
 
-def sync_contacts(fail_fast):
+def sync_contacts(fail_fast, related_to_clients=None):
     """Synchronizes all WHMCS contacts for existing clients."""
     exception_list = []
     client_list = []
-    for client in Client.objects.all():
+    qs = Client.objects.all()
+    if related_to_clients:
+        whmcs_client_uuids = Tblclients.objects.filter(id__in=related_to_clients).values_list('uuid', flat=True)
+        qs = qs.filter(
+            Q(syncedaccount__whmcs_id__in=related_to_clients) | Q(external_billing_id__in=whmcs_client_uuids)
+        ).distinct()
+    for client in qs:
         synced_account = SyncedAccount.objects.filter(client=client, subaccount=False).first()
         whmcs_client = Tblclients.objects.filter(
             id=synced_account.whmcs_id, uuid=synced_account.whmcs_uuid
@@ -95,7 +103,7 @@ def sync_contacts(fail_fast):
                                                                                             client.id,
                                                                                             synced_contacts))
             except Exception as ex:
-                LOG.exception(ex)
+                WHMCS_LOGGER.exception(ex)
                 if fail_fast:
                     exception_list.append(ex)
                     break

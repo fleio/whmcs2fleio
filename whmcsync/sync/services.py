@@ -230,12 +230,15 @@ def sync_service_conf_opts(whmcs_service: Tblhosting, fleio_service: Service):
         )
 
 
-def sync_services(fail_fast):
+def sync_services(fail_fast, related_to_clients=None):
     exception_list = []
     skipped_list = []
     service_list = []
     # NOTE: filter all products except for fleio products, for cases when the WHMCS module was used
-    for whmcs_service in Tblhosting.objects.exclude(packageid__lte=0):
+    qs = Tblhosting.objects.exclude(packageid__lte=0)
+    if related_to_clients:
+        qs = qs.filter(userid__in=related_to_clients)
+    for whmcs_service in qs:
 
         fleio_product = whmcs_service_to_fleio_product(whmcs_service=whmcs_service)
         if not fleio_product:
