@@ -120,10 +120,13 @@ def create_service_for_domain(domain_order_item: OrderItem, whmcs_domain: Tbldom
     return service
 
 
-def sync_domains(fail_fast):
+def sync_domains(fail_fast, related_to_clients=None):
     exception_list = []
     domains_list = []
-    for whmcs_domain in Tbldomains.objects.all():
+    qs = Tbldomains.objects.all()
+    if related_to_clients:
+        qs = qs.filter(userid__in=related_to_clients)
+    for whmcs_domain in qs:
         try:
             with transaction.atomic():
                 tld = match_tld(whmcs_domain=whmcs_domain)

@@ -13,15 +13,24 @@ class UserField(FieldToSync):
     record_name = 'User'
 
 
-def sync_users(fail_fast, related_to_clients=None):
+def sync_users(fail_fast, related_to_clients=None, with_clients=False):
     exception_list = []
     user_list = []
+
+    u2c_qs = TblusersClients.objects.all()
+    qs = Tblusers.objects.all()
+
     user_ids = None
     if related_to_clients and isinstance(related_to_clients, list) and len(related_to_clients):
-        user_ids = TblusersClients.objects.filter(client_id__in=related_to_clients).values_list('auth_user_id')
-    users_qs = Tblusers.objects.filter(id__in=user_ids) if (user_ids and len(user_ids)) else Tblusers.objects.all()
+        u2c_qs = u2c_qs.filter(client_id__in=related_to_clients)
+        user_ids = u2c_qs.values_list('auth_user_id')
+    elif with_clients:
+        user_ids = u2c_qs.values_list('auth_user_id')
 
-    for whmcs_user in users_qs:
+    if user_ids:
+        qs = qs.filter(id__in=user_ids)
+
+    for whmcs_user in qs:
         created = False
         try:
             fleio_user = AppUser.objects.filter(email=whmcs_user.email).first()

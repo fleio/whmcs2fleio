@@ -9,6 +9,7 @@ from fleio.servers.models import ServerGroup
 from fleio.servers.models.server import ServerStatus
 from .utils import FieldToSync
 from .utils import sync_fields
+from ..models import Tblhosting
 from ..models import Tblservergroups
 from ..models import Tblservergroupsrel
 from ..models import Tblservers
@@ -32,8 +33,7 @@ SERVER_SETTINGS_FIELDS_TO_SYNC = [
 ]
 
 
-def sync_server_groups(options):
-    fail_fast = options.get('failfast', False)
+def sync_server_groups(fail_fast):
     exception_list = []
     name_list = []
     for group in Tblservergroups.objects.all():
@@ -54,11 +54,16 @@ def sync_server_groups(options):
     return name_list, exception_list
 
 
-def sync_servers(options):
-    fail_fast = options.get('failfast', False)
+def sync_servers(fail_fast, related_clients=None):
     exception_list = []
     name_list = []
-    for whmcs_server in Tblservers.objects.all():
+    qs = Tblservers.objects.all()
+    if related_clients:
+        server_ids_related_to_clients = Tblhosting.objects.filter(
+            userid__in=related_clients, server__isnull=False, server__gt=0
+        ).values_list('server', flat=True)
+        qs = qs.filter(id__in=server_ids_related_to_clients)
+    for whmcs_server in qs:
         try:
             with transaction.atomic():
                 server, created = Server.objects.update_or_create(

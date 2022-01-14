@@ -168,12 +168,14 @@ def match_ticket_assigned_to(whmcs_ticket: Tbltickets):
         return fleio_staff_user
 
 
-def sync_tickets(fail_fast, whmcs_ids=None):
+def sync_tickets(fail_fast, whmcs_ids=None, related_clients=None):
     exception_list = []
     tickets_list = []
     qs = Tbltickets.objects.all()
     if whmcs_ids:
         qs = qs.filter(id__in=whmcs_ids)
+    if related_clients:
+        qs = qs.filter(userid__in=related_clients)
     for whmcs_ticket in qs.order_by('id'):
         try:
             with transaction.atomic():

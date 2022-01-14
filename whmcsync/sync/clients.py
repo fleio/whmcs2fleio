@@ -104,15 +104,13 @@ def sync_client(id, whmcs_client=None):
     return whmcs_client.id
 
 
-def sync_clients(fail_fast, whmcs_ids=None, active_only=False):
+def sync_clients(fail_fast, whmcs_ids=None):
     """Synchronizes all WHMCS clients and users."""
     exception_list = []
     client_list = []
     qs = Tblclients.objects.all()
     if whmcs_ids and isinstance(whmcs_ids, list) and len(whmcs_ids):
         qs = qs.filter(id__in=whmcs_ids)
-    if active_only:
-        qs = qs.filter(status='Active')
     for client in qs:
         try:
             synced_id = sync_client(id=client.id, whmcs_client=client)
