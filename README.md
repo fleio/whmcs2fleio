@@ -1,3 +1,11 @@
+SUPPORTED VERSIONS
+==================
+
+WHMCS to Fleio migration app was latest tested with Fleio version 2021.12.1 
+and WHMCS version 8.3.1. However, tickets import works only from Fleio version
+2022.01.1. If you encounter problems using this to migrate WHMCS data to your Fleio
+installation, send email to support@fleio.com.
+
 SUPPORTED RESOURCES
 ===================
 
