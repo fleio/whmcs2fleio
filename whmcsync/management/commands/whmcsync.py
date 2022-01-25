@@ -4,6 +4,7 @@ from typing import Optional
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
+from django.db import transaction
 
 from whmcsync.whmcsync.sync.client_contacts import sync_contacts
 from whmcsync.whmcsync.sync.clients import sync_clients
@@ -104,7 +105,7 @@ class Command(BaseCommand):
                             dest='services',
                             default=False,
                             help='Sync all client services from WHMCS')
-        parser.add_argument('--failfast',
+        parser.add_argument('--fail-fast',
                             action='store_true',
                             dest='failfast',
                             default=False,
@@ -196,7 +197,9 @@ class Command(BaseCommand):
                           % (len(groups_list), len(exception_list)))
 
     def _sync_servers(self):
-        servers_list, exception_list = sync_servers(fail_fast=self.fail_fast, related_clients=self.clients)
+        servers_list, exception_list = sync_servers(
+            fail_fast=self.fail_fast, related_clients=self.clients
+        )
         self.stdout.write('\nNumber of synced servers: %d \nNumber of servers failed to sync: %s'
                           % (len(servers_list), len(exception_list)))
 
@@ -364,12 +367,13 @@ class Command(BaseCommand):
         verify_settings(ignore_auth_backend=options.get('ignoreauthbackend'))
 
         self.options = options
-        self.fail_fast = self.options.get('fail_fast', False)
+        self.fail_fast = self.options.get('failfast', False)
         self.all_configs = self.options.get('allconfigs', False)
         self.clients = self.options.get('clients')  # whmcs id list
         self.all_clients = self.options.get('allclients')
         self.all_client_data = self.options.get('allclientdata')
         self.import_clients = bool(self.clients or self.all_clients)
+        dry_run = self.options.get('dryrun', False)
 
         if self.all_clients and self.clients:
             raise CommandError('Specify either "--all-clients" or "--clients" not both')
@@ -379,71 +383,75 @@ class Command(BaseCommand):
                 'No clients specified. Use --all-clients or --clients x,y,z along with --all-client-data flag.'
             )
 
-        # Settings and other configs
-        if self.should_import(resource_type='currencies', ignore_clients_import=True, is_config=True):
-            self._sync_currencies()
+        with transaction.atomic():
+            # Settings and other configs
+            if self.should_import(resource_type='currencies', ignore_clients_import=True, is_config=True):
+                self._sync_currencies()
 
-        if self.should_import(resource_type='taxrules', ignore_clients_import=True, is_config=True):
-            self._sync_tax_rules()
+            if self.should_import(resource_type='taxrules', ignore_clients_import=True, is_config=True):
+                self._sync_tax_rules()
 
-        import_products = self.should_import(resource_type='products', ignore_clients_import=True, is_config=True)
-        if import_products:
-            self._sync_product_groups()
-            self._sync_server_groups()  # sync server groups for module settings (e.g. cpanel server)
-            self._sync_products()
+            import_products = self.should_import(resource_type='products', ignore_clients_import=True, is_config=True)
+            if import_products:
+                self._sync_product_groups()
+                self._sync_server_groups()  # sync server groups for module settings (e.g. cpanel server)
+                self._sync_products()
 
-        if not import_products and self.should_import(resource_type='productgroups', ignore_clients_import=True):
-            self._sync_product_groups()
-        if not import_products and self.should_import(resource_type='servergroups', ignore_clients_import=True):
-            self._sync_server_groups()
+            if not import_products and self.should_import(resource_type='productgroups', ignore_clients_import=True):
+                self._sync_product_groups()
+            if not import_products and self.should_import(resource_type='servergroups', ignore_clients_import=True):
+                self._sync_server_groups()
 
-        if self.should_import(resource_type='configurableoptions', ignore_clients_import=True, is_config=True):
-            self._sync_configurable_options()
+            if self.should_import(resource_type='configurableoptions', ignore_clients_import=True, is_config=True):
+                self._sync_configurable_options()
 
-        if self.should_import(resource_type='clientgroups', ignore_clients_import=True, is_config=True):
-            self._sync_client_groups()
+            if self.should_import(resource_type='clientgroups', ignore_clients_import=True, is_config=True):
+                self._sync_client_groups()
 
-        if self.should_import(resource_type='ticketpredefinedreplies', ignore_clients_import=True, is_config=True):
-            self._sync_ticket_predefined_reply_categories()
-            self._sync_ticket_predefined_replies()
+            if self.should_import(resource_type='ticketpredefinedreplies', ignore_clients_import=True, is_config=True):
+                self._sync_ticket_predefined_reply_categories()
+                self._sync_ticket_predefined_replies()
 
-        if self.should_import(resource_type='ticketdepartments', ignore_clients_import=True, is_config=True):
-            self._sync_ticket_departments()
+            if self.should_import(resource_type='ticketdepartments', ignore_clients_import=True, is_config=True):
+                self._sync_ticket_departments()
 
-        should_import_tlds = self.should_import(
-            resource_type='domainspricing', ignore_clients_import=True, is_config=True
-        )
-        should_import_registrars = self.should_import(
-            resource_type='domainsregistrars', ignore_clients_import=True, is_config=True
-        )
-        if should_import_registrars or should_import_tlds:
-            # also import registrars before importing TLDs
-            self._sync_registrars()
-            if should_import_tlds:
-                self._sync_tlds()
+            should_import_tlds = self.should_import(
+                resource_type='domainspricing', ignore_clients_import=True, is_config=True
+            )
+            should_import_registrars = self.should_import(
+                resource_type='domainsregistrars', ignore_clients_import=True, is_config=True
+            )
+            if should_import_registrars or should_import_tlds:
+                # also import registrars before importing TLDs
+                self._sync_registrars()
+                if should_import_tlds:
+                    self._sync_tlds()
 
-        # Client data
-        if self.should_import(resource_type='users'):
-            self._sync_users()
+            # Client data
+            if self.should_import(resource_type='users'):
+                self._sync_users()
 
-        if self.import_clients:
-            self._sync_clients()
+            if self.import_clients:
+                self._sync_clients()
 
-        if self.should_import(resource_type='contacts'):
-            self._sync_contacts()
+            if self.should_import(resource_type='contacts'):
+                self._sync_contacts()
 
-        if self.should_import(resource_type='servers'):
-            self._sync_servers()
+            if self.should_import(resource_type='servers'):
+                self._sync_servers()
 
-        if self.should_import(resource_type='services'):
-            self._sync_services()
+            if self.should_import(resource_type='services'):
+                self._sync_services()
 
-        if self.should_import(resource_type='tickets'):
-            self._sync_tickets()
+            if self.should_import(resource_type='tickets'):
+                self._sync_tickets()
 
-        if self.should_import(resource_type='domains'):
-            self._sync_domains()
+            if self.should_import(resource_type='domains'):
+                self._sync_domains()
 
-        # Other options unrelated to clients or configs
-        if self.should_import(resource_type='staffusers', ignore_clients_import=True):
-            self._sync_staff_users()
+            # Other options unrelated to clients or configs
+            if self.should_import(resource_type='staffusers', ignore_clients_import=True):
+                self._sync_staff_users()
+
+            if dry_run:
+                transaction.set_rollback(True)

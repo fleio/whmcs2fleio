@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 
 from .utils import FieldToSync
 from .utils import sync_fields
@@ -33,23 +34,28 @@ def sync_users(fail_fast, related_to_clients=None, with_clients=False):
     for whmcs_user in qs:
         created = False
         try:
-            fleio_user = AppUser.objects.filter(email=whmcs_user.email).first()
-            if not fleio_user:
-                created = True
-                fleio_user = AppUser()
+            with transaction.atomic():
+                fleio_user = AppUser.objects.filter(email=whmcs_user.email).first()
+                if not fleio_user:
+                    created = True
+                    fleio_user = AppUser()
 
-            user_fields_to_sync = []
-            if created:
-                # don't change these fields if we only update the user
-                user_fields_to_sync.append(UserField(fleio_key='email', whmcs_key='email', fleio_max_length=254))
-                user_fields_to_sync.append(UserField(fleio_key='username', whmcs_key='email', fleio_max_length=150))
-                user_fields_to_sync.append(UserField(fleio_key='password', whmcs_key='password'))
-            user_fields_to_sync.append(UserField(fleio_key='first_name', whmcs_key='first_name', fleio_max_length=150))
-            user_fields_to_sync.append(UserField(fleio_key='last_name', whmcs_key='last_name', fleio_max_length=150))
-            user_fields_to_sync.append(UserField(fleio_key='last_login', whmcs_key='last_login'))
-            # process user fields
-            sync_fields(fleio_record=fleio_user, whmcs_record=whmcs_user, fields_to_sync=user_fields_to_sync)
-            fleio_user.save()
+                user_fields_to_sync = []
+                if created:
+                    # don't change these fields if we only update the user
+                    user_fields_to_sync.append(UserField(fleio_key='email', whmcs_key='email', fleio_max_length=254))
+                    user_fields_to_sync.append(UserField(fleio_key='username', whmcs_key='email', fleio_max_length=150))
+                    user_fields_to_sync.append(UserField(fleio_key='password', whmcs_key='password'))
+                user_fields_to_sync.append(
+                    UserField(fleio_key='first_name', whmcs_key='first_name', fleio_max_length=150)
+                )
+                user_fields_to_sync.append(
+                    UserField(fleio_key='last_name', whmcs_key='last_name', fleio_max_length=150)
+                )
+                user_fields_to_sync.append(UserField(fleio_key='last_login', whmcs_key='last_login'))
+                # process user fields
+                sync_fields(fleio_record=fleio_user, whmcs_record=whmcs_user, fields_to_sync=user_fields_to_sync)
+                fleio_user.save()
         except Exception as e:
             WHMCS_LOGGER.exception(e)
             exception_list.append(e)

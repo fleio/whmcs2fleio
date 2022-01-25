@@ -31,6 +31,6 @@ def sync_tax_rules(fail_fast):
             if created:
                 WHMCS_LOGGER.info('Created tax {} for {}: {}'.format(fleio_tax.name, fleio_tax.country, fleio_tax.rate))
             else:
-                WHMCS_LOGGER.info('Updated tax {} for {}: {}%'.format(fleio_tax.name, fleio_tax.country, fleio_tax.rate))
+                WHMCS_LOGGER.info('Updated tax {} for {}: {}'.format(fleio_tax.name, fleio_tax.country, fleio_tax.rate))
     return tax_list, exception_list, skipped_list
 

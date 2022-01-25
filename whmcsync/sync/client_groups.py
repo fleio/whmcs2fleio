@@ -1,11 +1,6 @@
-import logging
-
-from django.utils.translation import ugettext_lazy as _
-
 from fleio.core.models import ClientGroup
 from ..models import Tblclientgroups
-
-LOG = logging.getLogger('whmcsync')
+from ..utils import WHMCS_LOGGER
 
 
 def sync_client_groups(fail_fast):
@@ -17,12 +12,12 @@ def sync_client_groups(fail_fast):
                                                                    defaults={'description': 'WHMCS Client Group'})
             name_list.append(group.groupname)
             if created:
-                msg = _('New client group synced: {}').format(group.groupname)
+                msg = 'New client group synced: {}'.format(group.groupname)
             else:
-                msg = _('Client group "{}" updated').format(group.groupname)
-            LOG.debug(msg)
+                msg = 'Client group "{}" updated'.format(group.groupname)
+            WHMCS_LOGGER.info(msg)
         except Exception as e:
-            LOG.exception(e)
+            WHMCS_LOGGER.exception(e)
             exception_list.append(e)
             if fail_fast:
                 break
