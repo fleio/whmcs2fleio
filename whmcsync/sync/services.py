@@ -145,6 +145,9 @@ def sync_cancellation_request_if_exists(whmcs_service: Tblhosting, fleio_service
                 cancellation_type=cancellation_type
             )
             cancellation_request.save(update_fields=['cancellation_request'])
+            WHMCS_LOGGER.info(
+                'Created cancellation request for service {} ({})'.format(fleio_service.display_name, whmcs_service.id)
+            )
 
 
 def get_fleio_server_by_whmcs_id(whmcs_server_id):
@@ -227,6 +230,11 @@ def sync_service_conf_opts(whmcs_service: Tblhosting, fleio_service: Service):
             price=price,
             unit_price=unit_price,
             setup_fee=setup_fee
+        )
+        WHMCS_LOGGER.info(
+            'Synced configurable option {} for service {} ({})'.format(
+                fleio_conf_option.name, fleio_service.display_name, whmcs_service.id
+            )
         )
 
 
@@ -318,6 +326,19 @@ def sync_services(fail_fast, related_to_clients=None):
             exception_list.append(e)
             if fail_fast:
                 break
+        else:
+            if created:
+                WHMCS_LOGGER.info(
+                    'Created service {} ({}) for client {}'.format(
+                        service.display_name, whmcs_service.id, service.client.name
+                    )
+                )
+            else:
+                WHMCS_LOGGER.info(
+                    'Updated service {} ({}) for client {}'.format(
+                        service.display_name, whmcs_service.id, service.client.name
+                    )
+                )
 
     num_excluded = Tblhosting.objects.filter(packageid__lte=0).count()
     if num_excluded:

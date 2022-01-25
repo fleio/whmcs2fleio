@@ -35,6 +35,9 @@ def sync_product_upgrades():
             ).first()
             if fleio_product and fleio_upgrade_product:
                 fleio_product.upgrades.add(fleio_upgrade_product)
+                WHMCS_LOGGER.info(
+                    'Added product {} as upgrade to product {}'.format(fleio_upgrade_product.name, fleio_product.name)
+                )
         except Exception as e:
             WHMCS_LOGGER.exception(e)
             WHMCS_LOGGER.error(
@@ -72,6 +75,12 @@ def sync_products(fail_fast):
                     # remove upgrades from imported product to other WHMCS products, they'll be re-added later
                     if upgrade.code.startswith('whmcs'):
                         fleio_prod.upgrades.remove(upgrade)
+
+                if created:
+                    WHMCS_LOGGER.info('Imported product {}'.format(fleio_prod.name))
+                else:
+                    WHMCS_LOGGER.info('Updated product {}'.format(fleio_prod.name))
+
         except Exception as e:
             WHMCS_LOGGER.exception(e)
             exception_list.append(e)

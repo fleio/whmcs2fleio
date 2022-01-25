@@ -120,9 +120,8 @@ def sync_clients(fail_fast, whmcs_ids=None):
                                                             synced_id))
         except Exception as ex:
             WHMCS_LOGGER.exception(ex)
+            exception_list.append(ex)
             if fail_fast:
-                exception_list.append(ex)
                 break
-            else:
-                exception_list.append(ex)
+
     return client_list, exception_list

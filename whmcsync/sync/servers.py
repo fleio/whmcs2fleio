@@ -1,5 +1,4 @@
 from django.db import transaction
-from django.utils.translation import ugettext_lazy as _
 
 from fleio.conf.utils import fernet_encrypt
 from fleio.core.models import Plugin
@@ -42,10 +41,10 @@ def sync_server_groups(fail_fast):
                                                                    defaults={'description': 'WHMCS server group'})
             name_list.append(group.name)
             if created:
-                msg = _('New server group created: {}').format(group.name)
+                msg = 'New server group created: {}'.format(group.name)
             else:
-                msg = _('Server group "{}" updated').format(group.name)
-            WHMCS_LOGGER.debug(msg)
+                msg = 'Server group "{}" updated'.format(group.name)
+            WHMCS_LOGGER.info(msg)
         except Exception as e:
             WHMCS_LOGGER.exception(e)
             exception_list.append(e)
@@ -66,7 +65,7 @@ def sync_servers(fail_fast, related_clients=None):
     for whmcs_server in qs:
         try:
             with transaction.atomic():
-                server, created = Server.objects.update_or_create(
+                server, server_created = Server.objects.update_or_create(
                     name=whmcs_server.name,
                     group=get_fleio_server_group(whmcs_server=whmcs_server),
                     plugin=get_fleio_server_plugin(whmcs_server=whmcs_server),
@@ -86,6 +85,12 @@ def sync_servers(fail_fast, related_clients=None):
             exception_list.append(e)
             if fail_fast:
                 break
+        else:
+            if server_created:
+                WHMCS_LOGGER.info('Created server {}'.format(server.name))
+            else:
+                WHMCS_LOGGER.info('Updated server {}'.format(server.name))
+
     return name_list, exception_list
 
 

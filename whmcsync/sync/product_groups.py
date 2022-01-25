@@ -1,5 +1,3 @@
-from django.utils.translation import ugettext_lazy as _
-
 from fleio.billing.models import ProductGroup
 from ..models import Tblproductgroups
 from ..models import Tblproducts
@@ -21,9 +19,9 @@ def sync_product_groups(fail_fast):
                                                                               'visible': True})
             name_list.append(group.name)
             if created:
-                msg = _('New product group synced: {}').format(group.name)
+                msg = 'New product group synced: {}'.format(group.name)
             else:
-                msg = _('Product group {} updated').format(group.name)
+                msg = 'Product group {} updated'.format(group.name)
             WHMCS_LOGGER.info(msg)
         except Exception as e:
             WHMCS_LOGGER.exception(e)
