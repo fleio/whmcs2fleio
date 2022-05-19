@@ -14,4 +14,4 @@ class SyncedAccount(models.Model):
     password_synced = models.BooleanField(default=False)
 
     def __str__(self):
-        return self.client.email
+        return str(self.client)

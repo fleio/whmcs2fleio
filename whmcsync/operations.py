@@ -3,7 +3,6 @@ import logging
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.utils.translation import ugettext_lazy as _
 
 from fleio.core.models import Client
 from fleio.core.models import ClientGroup
@@ -87,7 +86,7 @@ def add_client_groups(fleio_client: Client, whmcs_client: Tblclients):
         try:
             whmcs_group = Tblclientgroups.objects.get(pk=whmcs_group_id)
         except Tblclientgroups.DoesNotExist as e:
-            LOG.warning(_('Unable to sync WHMCS group: {}').format(whmcs_group_id))
+            LOG.warning('Unable to sync WHMCS group: {}'.format(whmcs_group_id))
             return
         try:
             fleio_client.groups.get(name=whmcs_group.groupname)
@@ -96,8 +95,8 @@ def add_client_groups(fleio_client: Client, whmcs_client: Tblclients):
                 fleio_group = ClientGroup.objects.get(name=whmcs_group.groupname)
             except ClientGroup.DoesNotExist:
                 LOG.warning(
-                    _('Unable to sync WHMCS group {} for Fleio client {}. '
-                      'Group is missing in Fleio.').format(whmcs_group.groupname, fleio_client.id)
+                    'Unable to sync WHMCS group {} for Fleio client {}. '
+                    'Group is missing in Fleio.'.format(whmcs_group.groupname, fleio_client.id)
                 )
             else:
                 fleio_client.groups.add(fleio_group)
