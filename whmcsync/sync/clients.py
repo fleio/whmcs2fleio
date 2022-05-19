@@ -33,7 +33,6 @@ CLIENT_FIELDS_TO_SYNC = [
     ClientField(fleio_key='state', whmcs_key='state', fleio_max_length=127),
     ClientField(fleio_key='zip_code', whmcs_key='postcode', fleio_max_length=10),
     ClientField(fleio_key='phone', whmcs_key='phonenumber', fleio_max_length=64),
-    ClientField(fleio_key='email', whmcs_key='email', fleio_max_length=127),
     ClientField(fleio_key='vat_id', whmcs_key='tax_id', fleio_max_length=32),
     ClientField(fleio_key='tax_exempt', whmcs_key='taxexempt'),
 ]

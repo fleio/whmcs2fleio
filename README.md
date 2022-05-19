@@ -6,6 +6,9 @@ and WHMCS version 8.3.1. However, tickets import works only from Fleio version
 2022.01.1. If you encounter problems using this to migrate WHMCS data to your Fleio
 installation, send email to support@fleio.com.
 
+Also note: client email field was removed in Fleio 2022.05.0, thus current client import no longer takes it 
+into consideration.
+
 SUPPORTED RESOURCES
 ===================
 
